@@ -1,0 +1,2575 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>생애 재무 시뮬레이터</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    /* ══════════════════════════════════════
+       LIGHT THEME — COLOR SYSTEM
+       --bg:       #eef2fa
+       --card:     rgba(255,255,255,0.82)
+       --text-1:   #1a2744  (headings)
+       --text-2:   #2c4068  (body)
+       --text-3:   #4e6a92  (secondary)
+       --text-4:   #7a98bc  (muted)
+       --border:   rgba(90,130,200,0.18)
+       ══════════════════════════════════════ */
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
+      background: #eef2fa;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ── Decorative background spheres ── */
+    .bg-sphere {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    /* Large white sphere — top right */
+    .bg-sphere-1 {
+      width: 720px; height: 720px;
+      top: -200px; right: -180px;
+      background: radial-gradient(circle at 38% 32%,
+        rgba(255,255,255,0.95)    0%,
+        rgba(242,247,255,0.88)   22%,
+        rgba(218,232,255,0.72)   45%,
+        rgba(190,212,255,0.32)   68%,
+        transparent              85%);
+      filter: blur(8px);
+    }
+    /* Blue sphere — right middle */
+    .bg-sphere-2 {
+      width: 240px; height: 240px;
+      top: 34%; right: -55px;
+      background: radial-gradient(circle at 38% 32%,
+        rgba(255,255,255,0.70)   0%,
+        rgba(130,175,250,0.75)  15%,
+        rgba(59,130,246,0.62)   42%,
+        rgba(30,90,220,0.42)    70%,
+        rgba(20,60,180,0.12)    88%,
+        transparent             100%);
+      filter: blur(18px);
+      box-shadow: 0 8px 60px rgba(59,130,246,0.18);
+    }
+    /* Large white sphere — bottom left */
+    .bg-sphere-3 {
+      width: 600px; height: 600px;
+      bottom: -220px; left: -180px;
+      background: radial-gradient(circle at 40% 30%,
+        rgba(255,255,255,0.90)   0%,
+        rgba(235,243,255,0.80)   25%,
+        rgba(208,224,255,0.55)   50%,
+        rgba(180,205,255,0.20)   72%,
+        transparent              88%);
+      filter: blur(10px);
+    }
+    /* Small blue sphere — left middle */
+    .bg-sphere-4 {
+      width: 120px; height: 120px;
+      top: 46%; left: -28px;
+      background: radial-gradient(circle at 36% 30%,
+        rgba(255,255,255,0.60)   0%,
+        rgba(110,165,255,0.65)  14%,
+        rgba(59,130,246,0.55)   42%,
+        rgba(25,85,215,0.30)    72%,
+        transparent             100%);
+      filter: blur(14px);
+      box-shadow: 0 4px 30px rgba(59,130,246,0.16);
+    }
+
+    /* Ensure content above spheres */
+    #root { position: relative; z-index: 1; }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: rgba(90,130,200,0.06); }
+    ::-webkit-scrollbar-thumb { background: rgba(90,130,200,0.22); border-radius: 3px; }
+
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 5px; border-radius: 3px; outline: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 17px; height: 17px; border-radius: 50%; background: linear-gradient(135deg,#3b82f6,#7c3aed); cursor: pointer; box-shadow: 0 0 8px rgba(99,102,241,.4); }
+
+    .ev-body {
+      overflow: hidden;
+      transition: max-height .45s cubic-bezier(0.4,0,0.2,1),
+                  padding-top .45s cubic-bezier(0.4,0,0.2,1),
+                  padding-bottom .45s cubic-bezier(0.4,0,0.2,1);
+      max-height: 0;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+    }
+    .ev-body.open { max-height: 900px; padding-top: 12px !important; padding-bottom: 16px !important; }
+    .adv-body {
+      overflow: hidden;
+      transition: max-height .4s cubic-bezier(0.4,0,0.2,1);
+      max-height: 0;
+    }
+    .adv-body.open { max-height: 400px; }
+
+    /* ── Tailwind overrides — Light Theme ── */
+    .text-gray-900 { color: #1a2744 !important; }
+    .text-gray-800 { color: #1e3058 !important; }
+    .text-gray-700 { color: #2c4068 !important; }
+    .text-gray-600 { color: #3d5580 !important; }
+    .text-gray-500 { color: #5575a0 !important; }
+    .text-gray-400 { color: #7a98bc !important; }
+
+    /* Accent text — keep vivid on light bg */
+    .text-blue-700   { color: #1d4ed8 !important; }
+    .text-blue-600   { color: #2563eb !important; }
+    .text-blue-500   { color: #3b82f6 !important; }
+    .text-indigo-700 { color: #4338ca !important; }
+    .text-indigo-600 { color: #4f46e5 !important; }
+    .text-indigo-500 { color: #6366f1 !important; }
+    .text-emerald-700 { color: #047857 !important; }
+    .text-amber-600  { color: #d97706 !important; }
+    .text-orange-700 { color: #c2410c !important; }
+    .text-orange-600 { color: #ea580c !important; }
+    .text-red-500    { color: #ef4444 !important; }
+    .text-red-400    { color: #f87171 !important; }
+    .text-red-600    { color: #dc2626 !important; }
+    .text-green-600  { color: #16a34a !important; }
+    .text-emerald-400 { color: #34d399 !important; }
+    .text-amber-500  { color: #f59e0b !important; }
+    .text-amber-400  { color: #fbbf24 !important; }
+    .text-purple-600 { color: #9333ea !important; }
+    .text-purple-700 { color: #7e22ce !important; }
+
+    /* Surfaces */
+    .bg-white        { background-color: rgba(255,255,255,0.90) !important; }
+    .bg-gray-50      { background-color: rgba(240,245,255,0.80) !important; }
+    .bg-gray-100     { background-color: rgba(230,238,255,0.70) !important; }
+    .bg-gray-200     { background-color: rgba(210,225,250,0.60) !important; }
+    .border-gray-200 { border-color: rgba(90,130,200,0.18) !important; }
+    .border-gray-100 { border-color: rgba(90,130,200,0.12) !important; }
+    .divide-gray-100 > * + * { border-color: rgba(90,130,200,0.12) !important; }
+
+    /* Tinted surfaces */
+    .bg-blue-50   { background-color: rgba(59,130,246,0.08)  !important; }
+    .bg-indigo-50 { background-color: rgba(99,102,241,0.08)  !important; }
+    .bg-amber-50  { background-color: rgba(245,158,11,0.10)  !important; }
+    .bg-red-50    { background-color: rgba(239,68,68,0.08)   !important; }
+    .bg-purple-50 { background-color: rgba(168,85,247,0.08)  !important; }
+    .bg-green-50  { background-color: rgba(34,197,94,0.08)   !important; }
+    .border-blue-100   { border-color: rgba(59,130,246,0.22)  !important; }
+    .border-blue-200   { border-color: rgba(59,130,246,0.30)  !important; }
+    .border-indigo-100 { border-color: rgba(99,102,241,0.20)  !important; }
+    .border-indigo-200 { border-color: rgba(99,102,241,0.28)  !important; }
+    .border-purple-200 { border-color: rgba(168,85,247,0.25)  !important; }
+
+    .ring-blue-100 { --tw-ring-color: rgba(59,130,246,0.18) !important; }
+
+    /* Hover */
+    .hover\:bg-gray-50:hover  { background-color: rgba(235,243,255,0.90) !important; }
+    .hover\:bg-gray-100:hover { background-color: rgba(220,234,255,0.85) !important; }
+    .hover\:bg-white:hover    { background-color: rgba(255,255,255,0.95) !important; }
+    .hover\:bg-blue-50:hover  { background-color: rgba(59,130,246,0.10)  !important; }
+    .hover\:bg-blue-100:hover { background-color: rgba(59,130,246,0.15)  !important; }
+    .hover\:bg-amber-100:hover { background-color: rgba(245,158,11,0.12) !important; }
+    .hover\:bg-red-100:hover  { background-color: rgba(239,68,68,0.10)   !important; }
+
+    /* Input fields */
+    input[type=text], input[type=number] {
+      background: rgba(255,255,255,0.88) !important;
+      border-color: rgba(90,130,200,0.28) !important;
+      color: #1a2744 !important;
+    }
+    input[type=text]:focus, input[type=number]:focus {
+      border-color: rgba(59,130,246,0.60) !important;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important;
+      outline: none;
+    }
+    input[type=text]::placeholder, input[type=number]::placeholder {
+      color: #9ab0cc;
+    }
+  </style>
+</head>
+<body>
+<div aria-hidden="true">
+  <div class="bg-sphere bg-sphere-1"></div>
+  <div class="bg-sphere bg-sphere-2"></div>
+  <div class="bg-sphere bg-sphere-3"></div>
+  <div class="bg-sphere bg-sphere-4"></div>
+</div>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+
+// ─────────────────────────────────────────────
+// TAX ENGINE  (기준: TAX_진.md / 2026년 세법)
+// ─────────────────────────────────────────────
+const TAX_BRACKETS = [
+  { limit: 14000000,   rate: .06, ded: 0 },
+  { limit: 50000000,   rate: .15, ded: 1260000 },
+  { limit: 88000000,   rate: .24, ded: 5760000 },
+  { limit: 150000000,  rate: .35, ded: 15440000 },
+  { limit: 300000000,  rate: .38, ded: 19940000 },
+  { limit: 500000000,  rate: .40, ded: 25940000 },
+  { limit: 1000000000, rate: .42, ded: 35940000 },
+  { limit: Infinity,   rate: .45, ded: 65940000 },
+];
+
+function earnedDed(sal) {
+  if (sal <= 5e6)   return sal * .70;
+  if (sal <= 15e6)  return 3500000  + (sal - 5e6)  * .40;
+  if (sal <= 45e6)  return 7500000  + (sal - 15e6) * .15;
+  if (sal <= 100e6) return 12000000 + (sal - 45e6) * .05;
+  return 14750000 + (sal - 100e6) * .02;
+}
+
+function progTax(base) {
+  if (base <= 0) return 0;
+  for (const b of TAX_BRACKETS) if (base <= b.limit) return base * b.rate - b.ded;
+  return 0;
+}
+
+// 사적연금 분리과세 세율 (§7.2, 나이별)
+function privPenRate(age) {
+  if (age >= 80) return 0.033;
+  if (age >= 70) return 0.044;
+  return 0.055;
+}
+
+// 환산급여공제 (퇴직소득세 중간 단계 — 환산급여에서 차감)
+function annualizedRetDed(ann) {
+  if (ann <= 8e6)  return ann;                             // 800만 이하 전액
+  if (ann <= 70e6) return 8e6  + (ann - 8e6)  * .60;     // ~7,000만
+  if (ann <= 1e8)  return 45.2e6 + (ann - 70e6) * .55;   // ~1억
+  if (ann <= 3e8)  return 61.7e6 + (ann - 1e8)  * .45;   // ~3억
+  return 151.7e6 + (ann - 3e8) * .35;                     // 3억 초과
+}
+
+// 퇴직소득세 (§7.6, 현행법: 근속연수공제 + 환산급여공제)
+function calcRetirementTax(retFund, yearsOfService) {
+  if (retFund <= 0 || yearsOfService <= 0) return 0;
+  const y = Math.max(1, Math.round(yearsOfService));
+  // ① 근속연수공제 (§7.6.2)
+  let ded;
+  if (y <= 5)       ded = y * 1e6;                            // 100만원/년
+  else if (y <= 10) ded = 5e6  + (y - 5)  * 2e6;             // 500만 + 200만/년
+  else if (y <= 20) ded = 1.5e7 + (y - 10) * 2.5e6;          // 1,500만 + 250만/년
+  else              ded = 4e7  + (y - 20) * 3e6;              // 4,000만 + 300만/년
+  const taxable    = Math.max(0, retFund - ded);
+  const annualized = taxable * 12 / y;                        // ② 환산급여
+  const annDed     = annualizedRetDed(annualized);            // ③ 환산급여공제 차감
+  const taxBase    = Math.max(0, annualized - annDed);        // ④ 환산과세표준
+  const annualTax  = progTax(taxBase);                        // ⑤ 환산산출세액
+  const finalTax   = annualTax * y / 12;                      // ⑥ 최종세액
+  return Math.round(finalTax * 1.1);                          // + 지방소득세 10%
+}
+
+// 부동산 보유세: 재산세 + 종부세 (§6.2, 6.3 간이)
+function calcPropertyTax(marketValue) {
+  if (marketValue <= 0) return 0;
+  const publicPrice = marketValue * 0.70;       // 공시가격 ≈ 시가 70%
+  const taxBase     = publicPrice * 0.60;       // 과세표준 = 공시가 × 60%
+  // 재산세 누진 (§6.2)
+  let propTax;
+  if (taxBase <= 6e7)       propTax = taxBase * 0.001;
+  else if (taxBase <= 1.5e8) propTax = 60000   + (taxBase - 6e7)   * 0.0015;
+  else if (taxBase <= 3e8)   propTax = 195000  + (taxBase - 1.5e8) * 0.0025;
+  else                       propTax = 570000  + (taxBase - 3e8)   * 0.004;
+  propTax *= 1.4;  // 도시지역분·지방교육세 등 가산 (~40%)
+  // 종합부동산세 (§6.3, 1세대1주택 공제 12억)
+  if (publicPrice > 1.2e9) {
+    const jongbuBase = (publicPrice - 1.2e9) * 0.60;
+    propTax += jongbuBase * 0.01;  // 간이 실효세율 1%
+  }
+  return Math.round(propTax);
+}
+
+// 은퇴 후 건강보험료 (§8.2 지역가입자 전환 로직, 연간)
+function calcRetirementHealth(yearsSinceRetirement, lastAnnualSalary, pensionIncome, financialIncome, realEstateValue) {
+  if (yearsSinceRetirement <= 0) return 0;
+  const HEALTH_RATE = 0.0719, LTC_RATIO = 0.1314;
+  if (yearsSinceRetirement <= 2) {
+    // 임의계속가입 (2년): 퇴직 전 보수월액 기준, 사업주분 포함 전액 본인 부담 (§8.2.6)
+    const lastMonthly = (lastAnnualSalary || 0) / 12;
+    const h = lastMonthly * HEALTH_RATE;
+    return Math.round((h + h * LTC_RATIO) * 12);
+  }
+  // 지역가입자 (3년차~): 소득 + 재산 기반 (§8.2.4)
+  // 국민연금 수령액은 50%만 건보료 소득으로 인정 (§8.2.4 / §7.5); 사적연금은 현행 비부과
+  const incomeMonthly = (pensionIncome * 0.5 + financialIncome) / 12;
+  const MIN_PREMIUM   = 20160;  // 2026 지역가입자 최저보험료
+  const incomeHealth  = Math.max(MIN_PREMIUM, incomeMonthly * HEALTH_RATE);
+  const ltc           = incomeHealth * LTC_RATIO;
+  // 재산 보험료 간이 (월)
+  let propMonthly = 0;
+  if      (realEstateValue > 6e8)  propMonthly = 200000;
+  else if (realEstateValue > 3e8)  propMonthly = 120000;
+  else if (realEstateValue > 0)    propMonthly =  60000;
+  return Math.round((incomeHealth + ltc + propMonthly) * 12);
+}
+
+// 종합 세금 계산 (근로기간·은퇴기간 통합)
+function calcTax({ salary, financial, pension, married, childCount,
+                   pensionContrib, insurance, medical,
+                   isRetired, yearsSinceRetirement, lastAnnualSalary, realEstateValue }) {
+  // ── 사회보험료 ──
+  let social = 0, retirementHealth = 0;
+  if (!isRetired && salary > 0) {
+    // 근로기간: 4대보험 (근로자 부담, §8.5)
+    const monthly = salary / 12;
+    const npCap   = 6370000;  // 국민연금 기준소득월액 상한 (2026)
+    social = Math.min(monthly, npCap) * .0475 * 12   // 국민연금 4.75%
+           + salary * .03595                           // 건강보험 3.595%
+           + salary * .03595 * .1314                  // 장기요양 (건보료 × 13.14%)
+           + salary * .009;                            // 고용보험 0.9%  → 합계 ≈ 9.72%
+    // 보수외소득 2천만 초과 시 추가 건강보험료 (§8.2.2)
+    if (financial > 20e6) {
+      social += (financial - 20e6) * 0.0719;          // 본인 100% 부담
+    }
+  } else if (isRetired) {
+    // 은퇴기간: 지역가입자 건강보험료 (§8.2.4~8.2.7)
+    retirementHealth = calcRetirementHealth(yearsSinceRetirement, lastAnnualSalary, pension, financial, realEstateValue);
+    social = retirementHealth;
+  }
+
+  // ── 소득공제 ──
+  const eDed = salary > 0 ? earnedDed(salary) : 0;
+  const pDed = 1500000 + (married ? 1500000 : 0) + childCount * 1500000;
+  // 연금소득공제 (§7.1)
+  let penDed = 0;
+  if (pension > 0) {
+    if (pension <= 3.5e6)     penDed = pension;
+    else if (pension <= 7e6)  penDed = 3500000  + (pension - 3.5e6) * .4;
+    else if (pension <= 14e6) penDed = 4900000  + (pension - 7e6)   * .2;
+    else                      penDed = Math.min(9e6, 6300000 + (pension - 14e6) * .1);
+  }
+  const base = Math.max(0, salary + pension - eDed - pDed - penDed - social);
+  let tax = progTax(base);
+
+  // ── 세액공제 ──
+  // 근로소득세액공제: 산출세액 130만원 이하 55%, 초과 시 감소 (총급여 기준 한도 차등)
+  const ecLimit = salary <= 33e6 ? 740000 : salary <= 70e6 ? 660000 : 500000;
+  const ec = tax <= 1300000
+    ? Math.min(tax * 0.55, ecLimit)
+    : Math.max(50000, ecLimit - (tax - 1300000) * 0.08);
+  // 연금저축·IRP 세액공제 (§7.2.1): 총급여 5,500만원 이하 16.5%, 초과 13.2%; 한도 900만원
+  const pcRate  = salary <= 55e6 ? 0.165 : 0.132;
+  const pcCap   = salary <= 55e6 ? 1485000 : 1188000;  // 900만 × rate
+  const pc      = Math.min((pensionContrib || 0) * pcRate, pcCap);
+  const ic = Math.min((insurance || 0) * .12, 100000);
+  const mc = Math.max(0, ((medical || 0) - (salary + pension) * .03) * .15);
+  const cc = childCount === 1 ? 150000 : childCount === 2 ? 350000 : childCount > 2 ? 350000 + (childCount - 2) * 300000 : 0;
+  tax = Math.max(0, tax - ec - pc - ic - mc - cc);
+  const local = tax * .1;
+
+  // ── 금융소득세 (§2.1~2.2) ──
+  let finTax = 0;
+  if (financial > 0) {
+    if (financial <= 20e6) finTax = financial * .154;
+    else {
+      finTax = 20e6 * .154;
+      finTax += Math.max(0, progTax(base + financial - 20e6) - progTax(base)) * 1.1;
+    }
+  }
+
+  // Determine marginal bracket for detail
+  let marginalRate = 0, marginalDed = 0;
+  for (const b of TAX_BRACKETS) { if (base <= b.limit) { marginalRate = b.rate; marginalDed = b.ded; break; } }
+
+  const npPremium_     = (!isRetired && salary > 0) ? Math.round(Math.min(salary/12, 6370000) * .0475 * 12) : 0;
+  const healthPremium_ = (!isRetired && salary > 0) ? Math.round(salary * .03595) : 0;
+  const ltcPremium_    = (!isRetired && salary > 0) ? Math.round(salary * .03595 * .1314) : 0;
+  const emplPremium_   = (!isRetired && salary > 0) ? Math.round(salary * .009) : 0;
+  const extraHealth_   = (!isRetired && financial > 20e6) ? Math.round((financial - 20e6) * 0.0719) : 0;
+  const grossTax_      = Math.round(progTax(base));
+  const totalCredits_  = Math.round(ec + pc + ic + mc + cc);
+
+  return {
+    social:           Math.round(social),
+    income:           Math.round(tax),
+    local:            Math.round(local),
+    financial:        Math.round(finTax),
+    retirementHealth: Math.round(retirementHealth),
+    total:            Math.round(social + tax + local + finTax),
+    detail: {
+      salary, isRetired, married, childCount,
+      earnedDed: Math.round(eDed), personalDed: pDed, pensionDed: Math.round(penDed),
+      socialDed: Math.round(social),
+      taxableBase: Math.round(base), marginalRate, marginalDed,
+      grossTax: grossTax_, totalCredits: totalCredits_,
+      creditBreakdown: { earned: Math.round(ec), pension: Math.round(pc), insurance: Math.round(ic), medical: Math.round(mc), child: Math.round(cc) },
+      finalIncomeTax: Math.round(tax),
+      npPremium: npPremium_, healthPremium: healthPremium_, ltcPremium: ltcPremium_, emplPremium: emplPremium_, extraHealth: extraHealth_,
+      financial, finTax: Math.round(finTax),
+      finMethod: financial > 20e6 ? '종합과세' : '분리과세(15.4%)',
+    },
+  };
+}
+
+// ─────────────────────────────────────────────
+// SIMULATION ENGINE
+// ─────────────────────────────────────────────
+function runSimulation(inp, scKey) {
+  const {
+    age: startAge, retirementAge, lifeExpectancy,
+    earnedIncome, financialIncome = 0, otherIncome = 0,
+    incomeGrowth = 3, inflation = 3,
+    assets: ia, expenses, events,
+    advanced = {}, spouseIncome = 30e6, pensionStartAge = 65,
+    invest = {}, returns: ret = {},
+    // financialIncome: user-entered external financial income (on top of asset yield)
+    // otherIncome: user-entered misc income (세금 포함 종합과세 처리)
+  } = inp;
+
+  // Per-asset annual return rates (user-specified or defaults)
+  const baseRet = {
+    cash:          (ret.cash          ?? 3)  / 100,
+    domesticStock: (ret.domesticStock ?? 7)  / 100,
+    overseasStock: (ret.overseasStock ?? 8)  / 100,
+    bonds:         (ret.bonds         ?? 4)  / 100,
+    pension:       (ret.pension       ?? 5)  / 100,
+    realEstate:    (ret.realEstate    ?? 3)  / 100,
+  };
+
+  // ia.retirePension → retFund(DC 퇴직연금 누적), ia.personalPension → ast.pension(개인연금)
+  let retFund = ia.retirePension || 0;   // 본인 퇴직연금 (DC형, 기존 누적액 포함)
+  let ast = {
+    cash:          ia.cash          || 0,
+    domesticStock: ia.domesticStock || 0,
+    overseasStock: ia.overseasStock || 0,
+    bonds:         ia.bonds         || 0,
+    pension:       ia.personalPension || 0,  // 개인연금(IRP 개인납입+연금저축)
+    realEstate:    ia.realEstate    || 0,
+  };
+  let lastSalary    = 0;   // 임의계속가입 기준: 퇴직 직전 연소득
+  let spouseRetFund = 0;   // 배우자 퇴직연금 (DC형)
+  const rows = [];
+  let depletionAge = null;
+
+  for (let age = startAge; age <= lifeExpectancy; age++) {
+    const yr = age - startAge + 1;          // 1-indexed simulation year
+    const yrs = age - startAge;
+    const infFactor = Math.pow(1 + inflation / 100, yrs);
+
+    // Economic shocks
+    // CYCLES: 5·10·15·20·25년차... 모두 침체
+    // CRASH:  5·10·15년차 침체 + 20·40·60년차 대공황(침체 아님), 반복
+    const isDepression = scKey === 'CRASH' && yr % 20 === 0;
+    const isRecession  = (scKey !== 'BASELINE') && (yr % 5 === 0) && !isDepression;
+
+    // Depression: hard -20% asset hit first (before this year's returns)
+    if (isDepression) {
+      Object.keys(ast).forEach(k => { ast[k] = Math.max(0, ast[k] * 0.80); });
+      retFund *= 0.80;
+    }
+
+    // Effective returns this year
+    let er = { ...baseRet };
+    // Recession adjustment (also applied during depression year)
+    if (isRecession || isDepression) {
+      er.cash          = Math.max(0,    er.cash);
+      er.domesticStock = er.domesticStock - 0.15;   // 주식 -15%p (침체/대공황 공통)
+      er.overseasStock = er.overseasStock - 0.15;   // 해외주식도 동일
+      er.bonds         = er.bonds         - 0.06;
+      er.pension       = er.pension       - 0.12;
+      er.realEstate    = er.realEstate    - 0.08;
+    }
+
+    // Income multiplier from shocks
+    const incMul = isDepression ? 0.60 : isRecession ? 0.90 : 1.0;
+    const expMul = isDepression ? 1.10 : isRecession ? 1.03 : 1.0;
+
+    // ── INCOME ──
+    let earned = 0;
+    if (age < retirementAge)
+      earned = Math.max(0, earnedIncome * Math.pow(1 + incomeGrowth / 100, yrs) * incMul);
+
+    let spouseEarned = 0;
+    if (events.marriage?.enabled && age >= events.marriage.age && age < (inp.spouseRetirementAge || retirementAge)) {
+      const spouseGrowth = inp.spouseIncomeGrowth ?? incomeGrowth;
+      const spouseYrs    = age - events.marriage.age;  // 배우자 소득은 결혼 시점부터 증가
+      spouseEarned = Math.max(0, (spouseIncome || 30e6) * Math.pow(1 + spouseGrowth / 100, spouseYrs) * incMul);
+    }
+
+    const finAssets = ast.cash + ast.domesticStock + ast.overseasStock + ast.bonds + ast.pension + retFund;
+    const finInc    = finAssets * 0.015;   // ~1.5% annual yield from asset pool
+    // User-entered financial income (외부 금융소득, 예: 별도 계좌 이자 등)
+    const extFinInc = financialIncome || 0;
+
+    let pubPen = 0;
+    if (age >= pensionStartAge)
+      pubPen = Math.min(1200000, Math.max(800000, earnedIncome * 0.003)) * 12 * infFactor;
+
+    let privPen = 0;
+    const privYrs = 15;
+    if (age >= 55 && age < 55 + privYrs && ast.pension > 0)
+      privPen = ast.pension / privYrs;
+
+    const totalInc = earned + spouseEarned + finInc + extFinInc + pubPen + privPen + (otherIncome || 0);
+
+    // ── 퇴직연금 (DC형, 기존 누적액 + 연봉의 1/12씩 적립) ──
+    if (age < retirementAge) {
+      retFund = retFund * (1 + er.pension);  // 기존 잔액에도 수익률 적용
+      if (earned > 0) {
+        retFund   += earned / 12;  // 연봉 1/12 신규 적립
+        lastSalary = earned;
+      }
+    }
+    let retirePayout = 0, retirePayoutTax = 0;
+    const evList = [];   // ← 먼저 선언 (퇴직연금 이벤트 push가 앞에 있으므로)
+
+    if (age === retirementAge && retFund > 0) {
+      // 퇴직소득세: 근속연수 기반 분류과세 (§7.3)
+      // 기존 운용 기간(pensionOpYears) + 시뮬레이션 기간(retirementAge - startAge) = 총 근속연수
+      const yearsOfService = (retirementAge - startAge) + (inp.pensionOpYears || 0);
+      retirePayoutTax = calcRetirementTax(retFund, yearsOfService);
+      retirePayout    = retFund - retirePayoutTax;
+      ast.pension += retirePayout;  // 세후 퇴직연금 → 연금계좌 입금
+      retFund = 0;
+      evList.push(`퇴직연금 수령 (세후 ${Math.round(retirePayout/1e4).toLocaleString()}만원 → 연금계좌)`);
+    }
+
+    // ── 배우자 퇴직연금 (DC형, 배우자 연봉의 1/12씩 적립) ──
+    const spouseRetAge_ = inp.spouseRetirementAge || retirementAge;
+    if (events.marriage?.enabled && age >= events.marriage.age && age < spouseRetAge_ && spouseEarned > 0) {
+      spouseRetFund = spouseRetFund * (1 + er.pension) + spouseEarned / 12;
+    }
+    if (events.marriage?.enabled && age === spouseRetAge_ && spouseRetFund > 0) {
+      const spouseYOS        = Math.max(1, spouseRetAge_ - (events.marriage.age || startAge));
+      const spouseRetTax     = calcRetirementTax(spouseRetFund, spouseYOS);
+      const spouseRetPayout  = spouseRetFund - spouseRetTax;
+      ast.pension += spouseRetPayout;  // 배우자 퇴직연금도 연금계좌로
+      retirePayoutTax += spouseRetTax; // 같은 해에 발생 시 합산 표시
+      retirePayout    += spouseRetPayout;
+      spouseRetFund = 0;
+      evList.push(`배우자 퇴직연금 수령 (세후 ${Math.round(spouseRetPayout/1e4).toLocaleString()}만원 → 연금계좌)`);
+    }
+
+    // ── EXPENSES ──
+    let livingExp, housingExp, extraExp;
+    const isRetiredNow = age >= retirementAge;
+    if (isRetiredNow && inp.retirementExpenseEnabled && (inp.retirementExpenseAmount ?? 0) > 0) {
+      // 은퇴 후 지출을 사용자가 직접 입력한 금액(현재 가치)으로 계산 — 물가상승률 반영
+      livingExp  = inp.retirementExpenseAmount * 12 * 1e4 * infFactor * expMul;
+      housingExp = 0;
+      extraExp   = 0;
+    } else {
+      livingExp  = expenses.living  * 12 * 1e4 * infFactor * expMul;
+      housingExp = expenses.housing * 12 * 1e4 * infFactor * expMul;
+      extraExp   = expenses.extra   * 12 * 1e4 * infFactor * expMul;
+    }
+    const baseExp = livingExp + housingExp + extraExp;
+    let evExp = 0;
+
+    let marriageCost = 0;
+    if (events.marriage?.enabled && age === events.marriage.age) {
+      marriageCost = events.marriage.cost || 5e7;
+      evExp += marriageCost;
+      evList.push('결혼');
+    }
+    // 결혼 후 추가 지출 (매년 물가 반영)
+    let marriageExtraExp = 0;
+    if (events.marriage?.enabled && age >= events.marriage.age && (events.marriage.extraMonthlyExpense || 0) > 0) {
+      marriageExtraExp = events.marriage.extraMonthlyExpense * 12 * 1e4 * infFactor * expMul;
+      evExp += marriageExtraExp;
+    }
+
+    let childcare = 0, educ = 0;
+    if (events.children?.enabled) {
+      const count = events.children.count || 1;
+      const careYrs = events.children.careYears || 20;
+      const birthAgesList = events.children.birthAges ||
+        Array.from({ length: count }, (_, i) =>
+          (events.children.firstAge || 30) + i * (events.children.interval || 2));
+      for (let c = 0; c < count; c++) {
+        const ba = birthAgesList[c] ?? ((events.children.firstAge || 30) + c * 2);
+        const ca = age - ba;
+        if (ca >= 0 && ca < careYrs) childcare += (events.children.monthlyCost || 1e6) * 12 * infFactor;
+        if (ca >= 19 && ca <= 22) educ     += (events.children.universityCost || 1e7) * infFactor;
+        if (ca === 0) evList.push(`자녀${c + 1} 출생`);
+      }
+    }
+    evExp += childcare + educ;
+
+    let parentSupportAmt = 0;
+    if (events.parentSupport?.enabled) {
+      const { startAge: ps, duration: pd = 15, monthly: pm = 5e5 } = events.parentSupport;
+      if (age >= ps && age < ps + pd) { parentSupportAmt = pm * 12 * infFactor; evExp += parentSupportAmt; }
+    }
+
+    const totalExp = baseExp + evExp;
+
+    // ── TAX ──
+    const married    = !!(events.marriage?.enabled && age >= events.marriage.age);
+    let   childCount = 0;
+    if (events.children?.enabled) {
+      const cCount = events.children.count || 1;
+      const cBirthAges = events.children.birthAges ||
+        Array.from({ length: cCount }, (_, i) =>
+          (events.children.firstAge || 30) + i * (events.children.interval || 2));
+      for (let c = 0; c < cCount; c++) {
+        const ba = cBirthAges[c] ?? ((events.children.firstAge || 30) + c * 2);
+        const ca = age - ba;
+        if (ca >= 0 && ca <= 20) childCount++;
+      }
+    }
+    const isRetired           = age >= retirementAge;
+    const yearsSinceRetirement = isRetired ? age - retirementAge : 0;
+
+    const txRes = calcTax({
+      salary:               earned + spouseEarned + (otherIncome || 0),
+      financial:            finInc + extFinInc,
+      pension:              pubPen,  // 공적연금만 §7.1 공제 적용; 사적연금(privPen)은 별도 분리과세
+      married, childCount,
+      pensionContrib:       (advanced.pensionMonthly  || 300000) * 12,
+      insurance:            (advanced.insuranceMonthly|| 200000) * 12,
+      medical:               advanced.medicalAnnual   || 1e6,
+      isRetired,
+      yearsSinceRetirement,
+      lastAnnualSalary:     lastSalary,
+      realEstateValue:      ast.realEstate,
+    });
+    // 사적연금세 (§7.4): 연 1,500만원 이하 → 저율 분리과세 3.3~5.5%, 초과 → 16.5% 분리과세
+    const privPenTax = privPen <= 0 ? 0
+      : privPen <= 15e6
+        ? privPen * privPenRate(age)   // ≤ 1,500만: 3.3~5.5%
+        : privPen * 0.165;             // > 1,500만: 16.5% 분리과세 선택
+    // 부동산 보유세: 재산세 + 종부세 (§6.2~6.3)
+    const propTax  = calcPropertyTax(ast.realEstate);
+    const totalTax = txRes.total + privPenTax + propTax;
+
+    // ── CASH FLOW & INVESTMENT ──
+    const afterExp = totalInc - totalTax - totalExp;
+
+    // User-specified annual investments — 금액 모드 or 가용액 퍼센트 모드
+    // afterExp already computed above; use it as pct base
+    const pctBase = Math.max(0, afterExp);
+    // 본인 투자 계획 (항상 적용)
+    let planI;
+    if (inp.investMode === 'pct') {
+      const ip = inp.investPct || {};
+      planI = {
+        cash:          (ip.cash          || 0) / 100 * pctBase,
+        domesticStock: (ip.domesticStock || 0) / 100 * pctBase,
+        overseasStock: (ip.overseasStock || 0) / 100 * pctBase,
+        bonds:         (ip.bonds         || 0) / 100 * pctBase,
+        pension:       (ip.pension       || 0) / 100 * pctBase,
+      };
+    } else {
+      planI = {
+        cash:          (invest.cash          || 0) * 1e4,
+        domesticStock: (invest.domesticStock || 0) * 1e4,
+        overseasStock: (invest.overseasStock || 0) * 1e4,
+        bonds:         (invest.bonds         || 0) * 1e4,
+        pension:       (invest.pension       || 0) * 1e4,
+      };
+    }
+    // 배우자 투자 계획 (결혼 나이 이후에만 적용, 배우자 전용 모드 사용)
+    if (events.marriage?.enabled && age >= events.marriage.age && spouseEarned > 0) {
+      const spouseMode = inp.spouseInvestMode || 'amount';
+      if (spouseMode === 'pct') {
+        const sip = inp.spouseInvestPct || {};
+        // 100% 기준 = 배우자 투자 가용액 (세후 소득 - 결혼 후 추가 지출)
+        const spouseExtraExp = (events.marriage?.extraMonthlyExpense || 0) * 1e4 * 12;
+        const spouseSocIns   = Math.min(spouseEarned / 12, 6370000) * 0.0475 * 12 + spouseEarned * 0.03595;
+        const spouseTaxBase  = Math.max(0, spouseEarned - earnedDed(spouseEarned) - 1500000 - spouseSocIns);
+        const spouseRoughTax = progTax(spouseTaxBase) * 1.1 + spouseSocIns;
+        const spousePctBase  = Math.max(0, spouseEarned - spouseRoughTax - spouseExtraExp);
+        for (const k of ['cash', 'domesticStock', 'overseasStock', 'bonds', 'pension']) {
+          planI[k] = (planI[k] || 0) + (sip[k] || 0) / 100 * spousePctBase;
+        }
+      } else {
+        const si = inp.spouseInvest || {};
+        for (const k of ['cash', 'domesticStock', 'overseasStock', 'bonds', 'pension']) {
+          planI[k] = (planI[k] || 0) + (si[k] || 0) * 1e4;
+        }
+      }
+    }
+    const totalPlanI = Object.values(planI).reduce((s, v) => s + v, 0);
+
+    if (afterExp >= 0) {
+      if (afterExp >= totalPlanI) {
+        // Invest as planned; rest → cash
+        Object.keys(planI).forEach(k => { if (ast[k] !== undefined) ast[k] += planI[k]; });
+        ast.cash += afterExp - totalPlanI;
+      } else {
+        // Scale down proportionally
+        const scale = totalPlanI > 0 ? afterExp / totalPlanI : 0;
+        Object.keys(planI).forEach(k => { if (ast[k] !== undefined) ast[k] += planI[k] * scale; });
+      }
+    } else {
+      // Deficit: withdraw in user-configured order (fallback to default, includes realEstate)
+      const withdrawOrder = inp.withdrawalOrder || ['cash', 'bonds', 'domesticStock', 'overseasStock', 'pension', 'realEstate'];
+      let def = -afterExp;
+      for (const k of withdrawOrder) {
+        if (def <= 0) break;
+        if (ast[k] == null) continue;
+        const av   = Math.max(0, ast[k]);
+        const take = Math.min(av, def);
+        const pen  = k === 'overseasStock' ? take * 0.22 * 0.3 : k === 'pension' ? take * 0.165 : 0;
+        ast[k] -= take;
+        def    -= take - pen;
+      }
+    }
+
+    // ── APPLY RETURNS ──
+    Object.keys(er).forEach(k => {
+      if (ast[k] !== undefined) ast[k] = Math.max(0, ast[k] * (1 + er[k]));
+    });
+
+    const totalNet = Object.values(ast).reduce((s, v) => s + Math.max(0, v), 0) + Math.max(0, retFund);
+    if (!depletionAge && totalNet <= 0 && age > retirementAge) depletionAge = age;
+
+    rows.push({
+      age, yr,
+      income:  Math.round(totalInc),
+      expense: Math.round(totalExp),
+      tax:     Math.round(totalTax),
+      cf:      Math.round(afterExp),
+      retirePayout,
+      retirePayoutTax,
+      cash:    Math.round(ast.cash),
+      dom:     Math.round(ast.domesticStock),
+      ovs:     Math.round(ast.overseasStock),
+      bonds:   Math.round(ast.bonds),
+      pension: Math.round(retFund + ast.pension),  // 퇴직연금 + 개인연금 합산 표시
+      re:      Math.round(ast.realEstate),
+      totalNet: Math.round(totalNet),
+      events:  evList,
+      isRecession, isDepression,
+      // ── 상세 내역 ──
+      incBreakdown: {
+        earned:      Math.round(earned),
+        spouse:      Math.round(spouseEarned),
+        assetYield:  Math.round(finInc),
+        extFin:      Math.round(extFinInc),
+        pubPension:  Math.round(pubPen),
+        privPension: Math.round(privPen),
+        other:       Math.round(otherIncome || 0),
+      },
+      expBreakdown: {
+        living:        Math.round(livingExp),
+        housing:       Math.round(housingExp),
+        extra:         Math.round(extraExp),
+        marriage:      Math.round(marriageCost),
+        marriageExtra: Math.round(marriageExtraExp),
+        childcare:     Math.round(childcare),
+        education:     Math.round(educ),
+        parentSupport: Math.round(parentSupportAmt),
+      },
+      taxBreakdown: {
+        social:           txRes.social,
+        incomeTax:        txRes.income,
+        local:            txRes.local,
+        financial:        txRes.financial,
+        privPenTax:       Math.round(privPenTax),
+        propertyTax:      propTax,
+        retirementHealth: txRes.retirementHealth,
+        retirePayoutTax:  Math.round(retirePayoutTax),
+      },
+      taxDetail:    txRes.detail,  // 세금 계산 근거 (DetailPanel용)
+      privPen_:     Math.round(privPen),
+      privPenRate_: privPen > 15e6 ? 0.165 : privPenRate(age),
+      realEstateForTax_: ast.realEstate,
+    });
+  }
+
+  const retRow        = rows.find(r => r.age === retirementAge) || rows[rows.length - 1];
+  const yrsLeft       = lifeExpectancy - retirementAge;
+  let   monthlyBudget = yrsLeft > 0 ? retRow.totalNet / yrsLeft / 12 : 0;
+  const penRow        = rows.find(r => r.age === (pensionStartAge || 65));
+  if (penRow) monthlyBudget += penRow.income * 0.15 / 12;
+
+  return {
+    rows, depletionAge,
+    retirementAssets: retRow.totalNet,
+    monthlyBudget: Math.round(monthlyBudget),
+    insights: makeInsights(rows, inp, depletionAge, retRow, monthlyBudget),
+  };
+}
+
+function makeInsights(rows, inp, depletionAge, retRow, monthlyBudget) {
+  const out = [];
+  if (depletionAge)
+    out.push(`현재 계획으로는 ${depletionAge}세에 자산이 고갈됩니다. 은퇴 후 ${depletionAge - inp.retirementAge}년 만입니다.`);
+  else
+    out.push(`${inp.lifeExpectancy}세까지 자산이 고갈되지 않습니다. 재무 계획이 안정적입니다.`);
+
+  out.push(`은퇴 시 총자산 ${fmt(retRow.totalNet)}, 은퇴 후 월 가용 예산 약 ${fmt(monthlyBudget)}.`);
+
+  // 퇴직연금 운용 방식 안내 (은퇴 연도가 있는 경우 항상 표시)
+  const retRow_ = rows.find(r => r.age === inp.retirementAge);
+  if (retRow_) {
+    const retirePayoutTax_ = retRow_.retirePayoutTax || 0;
+    const retirePayout_    = retRow_.retirePayout    || 0;
+    const pensionRetRate   = (inp.returns?.pension ?? 5);
+    if (retirePayout_ > 0) {
+      out.push(
+        `[퇴직연금] ${inp.retirementAge}세 은퇴 시 DC형 퇴직금 세후 ${fmt(retirePayout_)}이 연금계좌로 자동 입금됩니다. ` +
+        `퇴직소득세 ${fmt(retirePayoutTax_)} 납부 후 연금계좌 수익률(${pensionRetRate}%)로 계속 운용됩니다.`
+      );
+    } else {
+      out.push(
+        `[퇴직연금] ${inp.retirementAge}세 은퇴 시 DC형 퇴직금(세후)은 연금계좌로 자동 입금되어 ` +
+        `연금계좌 수익률(${pensionRetRate}%)로 계속 운용됩니다.`
+      );
+    }
+  }
+
+  const peak = rows.reduce((m, r) => r.tax > m.tax ? r : m, rows[0]);
+  if (peak) out.push(`세금 부담이 가장 큰 시점은 ${peak.age}세 (연간 ${fmt(peak.tax + (peak.retirePayoutTax || 0))}).`);
+
+  const wrk = rows.filter(r => r.age < inp.retirementAge && r.income > 0);
+  const avgSave = wrk.length
+    ? wrk.reduce((s, r) => s + Math.max(0, r.cf) / r.income, 0) / wrk.length
+    : 0;
+  out.push(`은퇴 전 평균 저축률 약 ${Math.round(avgSave * 100)}%.`);
+
+  const totalInvest = Object.values(inp.invest || {}).reduce((s, v) => s + (v || 0), 0);
+  out.push(`매년 계획 투자액 ${totalInvest.toLocaleString()}만원. 투자 수익률이 실현되면 은퇴 자산이 크게 늘 수 있습니다.`);
+
+  return out;
+}
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+function fmt(v) {
+  if (v == null || isNaN(v)) return '₩0';
+  const s = v < 0 ? '-' : '';
+  const a = Math.abs(v);
+  if (a >= 1e8) return `${s}₩${(a / 1e8) % 1 === 0 ? a / 1e8 : (a / 1e8).toFixed(1)}억`;
+  if (a >= 1e4) return `${s}₩${Math.round(a / 1e4).toLocaleString()}만`;
+  return `${s}₩${a.toLocaleString()}`;
+}
+
+// ─────────────────────────────────────────────
+// SVG CHARTS
+// ─────────────────────────────────────────────
+function AssetChart({ rows, retireAge, depletionAge }) {
+  const [hov, setHov] = useState(null);
+  const W = 600, H = 230, PL = 58, PR = 12, PT = 14, PB = 30;
+  const cW = W - PL - PR, cH = H - PT - PB;
+  const maxV = Math.max(...rows.map(r => r.totalNet), 1);
+  const minAge = rows[0].age, maxAge = rows[rows.length - 1].age;
+  const xS = a => PL + (a - minAge) / (maxAge - minAge) * cW;
+  const yS = v => PT + cH - Math.max(0, v) / maxV * cH;
+
+  const layers = [
+    { key: 're',     label: '부동산',   color: '#2c4068' },
+    { key: 'pension',label: '연금',     color: '#c4b5fd' },
+    { key: 'bonds',  label: '채권',     color: '#2dd4bf' },
+    { key: 'ovs',    label: '해외주식', color: '#fde68a' },
+    { key: 'dom',    label: '국내주식', color: '#86efac' },
+    { key: 'cash',   label: '예금',     color: '#93c5fd' },
+  ];
+
+  const polys = layers.map((l, li) => {
+    const tops = rows.map(r => {
+      const sv = layers.slice(0, li + 1).reduce((s, ll) => s + (r[ll.key] || 0), 0);
+      return `${xS(r.age).toFixed(1)},${yS(sv).toFixed(1)}`;
+    });
+    const bots = [...rows].reverse().map(r => {
+      const sv = li > 0 ? layers.slice(0, li).reduce((s, ll) => s + (r[ll.key] || 0), 0) : 0;
+      return `${xS(r.age).toFixed(1)},${yS(sv).toFixed(1)}`;
+    });
+    return <polygon key={l.key} points={[...tops, ...bots].join(' ')} fill={l.color} opacity=".85" />;
+  });
+
+  const linePts = rows.map(r => `${xS(r.age).toFixed(1)},${yS(r.totalNet).toFixed(1)}`).join(' ');
+  const yTicks  = [0, .25, .5, .75, 1].map(f => ({ v: maxV * f, y: yS(maxV * f) }));
+  const xTicks  = rows.filter(r => r.age % 5 === 0).map(r => r.age);
+  const hovRow  = hov != null ? rows[hov] : null;
+
+  // Recession / depression markers
+  const recMarkers = rows.filter(r => r.isRecession || r.isDepression);
+
+  // (life event timeline removed for cleaner chart)
+
+  return (
+    <div className="relative select-none">
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H }} onMouseLeave={() => setHov(null)}>
+        {yTicks.map((t, i) => <line key={i} x1={PL} y1={t.y} x2={W - PR} y2={t.y} stroke="rgba(90,130,200,0.14)" strokeWidth="1" />)}
+        {polys}
+        <polyline points={linePts} fill="none" stroke="#1d4ed8" strokeWidth="1.5" />
+        {/* Recession/depression markers */}
+        {recMarkers.map(r => (
+          <line key={r.age} x1={xS(r.age)} y1={PT} x2={xS(r.age)} y2={PT + cH}
+            stroke={r.isDepression ? '#b91c1c' : '#d97706'} strokeDasharray="4 3" strokeWidth={r.isDepression ? 2.5 : 2} opacity="1" />
+        ))}
+        {retireAge && <>
+          <line x1={xS(retireAge)} y1={PT} x2={xS(retireAge)} y2={PT + cH} stroke="#2563eb" strokeDasharray="5 3" strokeWidth="2" />
+          <text x={xS(retireAge) + 3} y={PT + 11} fontSize="9" fontWeight="bold" fill="#2563eb">은퇴</text>
+        </>}
+        {depletionAge && <>
+          <line x1={xS(depletionAge)} y1={PT} x2={xS(depletionAge)} y2={PT + cH} stroke="#dc2626" strokeWidth="2.5" />
+          <text x={xS(depletionAge) + 3} y={PT + 11} fontSize="9" fontWeight="bold" fill="#dc2626">고갈</text>
+        </>}
+        {/* Invisible hover zones */}
+        {rows.map((r, i) => (
+          <rect key={r.age} x={xS(r.age) - cW / rows.length / 2} y={PT}
+            width={cW / rows.length} height={cH} fill="transparent"
+            onMouseEnter={() => setHov(i)} />
+        ))}
+        {hovRow && <circle cx={xS(hovRow.age)} cy={yS(hovRow.totalNet)} r="4" fill="#1d4ed8" />}
+        {xTicks.map(a => <text key={a} x={xS(a)} y={H - 7} textAnchor="middle" fontSize="10" fill="rgba(44,64,104,0.80)">{a}</text>)}
+        {yTicks.filter((_, i) => i > 0).map((t, i) => (
+          <text key={i} x={PL - 4} y={t.y + 4} textAnchor="end" fontSize="9" fill="rgba(44,64,104,0.80)">
+            {t.v >= 1e8 ? `${(t.v / 1e8).toFixed(0)}억` : `${Math.round(t.v / 1e4)}만`}
+          </text>
+        ))}
+        <line x1={PL} y1={PT + cH} x2={W - PR} y2={PT + cH} stroke="rgba(90,130,200,0.25)" strokeWidth="1" />
+        <line x1={PL} y1={PT} x2={PL} y2={PT + cH} stroke="rgba(90,130,200,0.25)" strokeWidth="1" />
+      </svg>
+      {hovRow && (
+        <div className="absolute top-3 right-3 rounded-xl p-3 text-xs pointer-events-none z-10"
+          style={{ background:'rgba(245,249,255,0.97)', border:'1px solid rgba(90,130,200,0.22)', boxShadow:'0 4px 20px rgba(30,60,120,0.12)' }}>
+          <div className="font-bold mb-1.5" style={{ color:'#1a2744' }}>
+            {hovRow.age}세
+            {hovRow.isDepression && <span className="ml-1 text-red-500">대공황</span>}
+            {hovRow.isRecession  && <span className="ml-1 text-amber-500">침체</span>}
+          </div>
+          {layers.map(l => (
+            <div key={l.key} className="flex items-center gap-1.5 mb-0.5">
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: l.color, display: 'inline-block' }} />
+              <span className="text-gray-400 w-14">{l.label}</span>
+              <span className="font-medium">{fmt(hovRow[l.key])}</span>
+            </div>
+          ))}
+          <div className="pt-1 mt-1 flex justify-between gap-4"
+            style={{ borderTop:'1px solid rgba(90,130,200,0.18)' }}>
+            <span className="font-semibold" style={{ color:'#3d5580' }}>합계</span>
+            <span className="font-bold" style={{ color:'#1d4ed8' }}>{fmt(hovRow.totalNet)}</span>
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-3 mt-2 px-1">
+        {layers.map(l => (
+          <div key={l.key} className="flex items-center gap-1 text-xs" style={{ color:'#4e6a92' }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: l.color, display: 'inline-block' }} />
+            {l.label}
+          </div>
+        ))}
+        <div className="flex items-center gap-1 text-xs text-amber-500">
+          <span style={{ width: 10, height: 2, background: '#f59e0b', display: 'inline-block' }} /> 경기침체
+        </div>
+        <div className="flex items-center gap-1 text-xs text-red-500">
+          <span style={{ width: 10, height: 2, background: '#dc2626', display: 'inline-block' }} /> 대공황
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IncomeExpenseChart({ rows, retireAge }) {
+  const sampled = rows.filter(r => r.age % 3 === 0 || r.age === rows[0].age || r.age === rows[rows.length - 1].age);
+  const W = 600, H = 200, PL = 58, PR = 12, PT = 12, PB = 30;
+  const cW = W - PL - PR, cH = H - PT - PB;
+  const maxV = Math.max(...sampled.map(r => Math.max(r.income, r.expense)), 1);
+  const bGap = cW / sampled.length;
+  const bW   = Math.max(3, bGap * 0.28);
+  const xC   = i => PL + i * bGap + bGap * .5;
+  const yS   = v => PT + cH - Math.max(0, v) / maxV * cH;
+  const bH   = v => Math.max(1, Math.max(0, v) / maxV * cH);
+  const minAge = rows[0].age, maxAge = rows[rows.length - 1].age;
+  const retX   = retireAge ? PL + (retireAge - minAge) / (maxAge - minAge) * cW : null;
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H }}>
+        {[.25, .5, .75, 1].map((f, i) => <line key={i} x1={PL} y1={yS(maxV * f)} x2={W - PR} y2={yS(maxV * f)} stroke="rgba(90,130,200,0.14)" strokeWidth="1" />)}
+        {sampled.map((r, i) => (
+          <g key={r.age}>
+            <rect x={xC(i) - bW * 1.6} y={yS(r.income)}  width={bW} height={bH(r.income)}  fill="#2563eb" rx="1" opacity=".85" />
+            <rect x={xC(i) - bW * .5}  y={yS(r.expense)} width={bW} height={bH(r.expense)} fill="#ef4444" rx="1" opacity=".8"  />
+            <rect x={xC(i) + bW * .6}  y={yS(r.tax)}     width={bW} height={bH(r.tax)}     fill="rgba(44,64,104,0.80)" rx="1" opacity=".8"  />
+          </g>
+        ))}
+        {retX && <>
+          <line x1={retX} y1={PT} x2={retX} y2={PT + cH} stroke="#475569" strokeDasharray="4 3" strokeWidth="1.5" />
+          <text x={retX + 3} y={PT + 11} fontSize="9" fill="#475569">은퇴</text>
+        </>}
+        {sampled.filter((_, i) => i % 2 === 0).map((r, _) => (
+          <text key={r.age} x={xC(sampled.indexOf(r))} y={H - 7} textAnchor="middle" fontSize="9" fill="rgba(44,64,104,0.80)">{r.age}</text>
+        ))}
+        {[.25, .5, .75, 1].map((f, i) => (
+          <text key={i} x={PL - 4} y={yS(maxV * f) + 4} textAnchor="end" fontSize="9" fill="rgba(44,64,104,0.80)">
+            {maxV * f >= 1e8 ? `${((maxV * f) / 1e8).toFixed(0)}억` : `${Math.round((maxV * f) / 1e4)}만`}
+          </text>
+        ))}
+        <line x1={PL} y1={PT + cH} x2={W - PR} y2={PT + cH} stroke="rgba(90,130,200,0.25)" strokeWidth="1" />
+        <line x1={PL} y1={PT} x2={PL} y2={PT + cH} stroke="rgba(90,130,200,0.25)" strokeWidth="1" />
+      </svg>
+      <div className="flex gap-4 mt-2 px-1">
+        {[['소득', '#2563eb'], ['지출', '#ef4444'], ['세금', '#4e6a92']].map(([l, c]) => (
+          <div key={l} className="flex items-center gap-1 text-xs text-gray-500">
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: c, display: 'inline-block' }} />{l}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// BASE COMPONENTS
+// ─────────────────────────────────────────────
+
+// Number input: clears "0" on focus, restores on blur
+function Num({ label, value, onChange, unit, helper }) {
+  const [str, setStr]     = useState(value != null ? String(value) : '0');
+  const focused           = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setStr(value != null ? String(value) : '0');
+  }, [value]);
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-sm font-medium text-gray-700">{label}</span>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={str}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+          onFocus={() => {
+            focused.current = true;
+            if (str === '0') setStr('');
+          }}
+          onChange={e => {
+            const v = e.target.value;
+            if (/^-?\d*\.?\d*$/.test(v) || v === '') {
+              setStr(v);
+              const n = parseFloat(v);
+              if (!isNaN(n) && v !== '' && v !== '-') onChange(n);
+            }
+          }}
+          onBlur={() => {
+            focused.current = false;
+            const n = parseFloat(str);
+            if (isNaN(n) || str === '') { setStr('0'); onChange(0); }
+            else { setStr(String(n)); onChange(n); }
+          }}
+        />
+        {unit && <span className="text-xs text-gray-400 whitespace-nowrap">{unit}</span>}
+      </div>
+      {helper && <span className="text-xs text-gray-400">{helper}</span>}
+    </label>
+  );
+}
+
+function Slider({ label, value, onChange, min, max, step = 0.5, unit = '%' }) {
+  const pct = ((value - min) / (max - min) * 100).toFixed(1);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex justify-between items-center">
+        <span className="text-sm font-medium" style={{ color: '#2c4068' }}>{label}</span>
+        <span className="text-sm font-bold px-2 py-0.5 rounded-full"
+          style={{ background: 'rgba(99,102,241,0.18)', color: '#3730a3' }}>{value}{unit}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        style={{ background: `linear-gradient(to right, #6366f1 ${pct}%, rgba(90,130,200,0.22) ${pct}%)` }} />
+      <div className="flex justify-between text-xs" style={{ color: '#4e6a92' }}><span>{min}{unit}</span><span>{max}{unit}</span></div>
+    </div>
+  );
+}
+
+// Toggle: uses inline style for thumb so it never goes out of bounds
+function Toggle({ value, onChange }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className="relative flex-shrink-0 rounded-full"
+      style={{
+        width: 44, height: 24, minWidth: 44,
+        background: value ? 'linear-gradient(135deg,#3b82f6,#7c3aed)' : 'rgba(90,130,200,0.25)',
+        boxShadow: value ? '0 0 10px rgba(99,102,241,0.4)' : 'none',
+        transition: 'background .3s cubic-bezier(0.4,0,0.2,1), box-shadow .3s cubic-bezier(0.4,0,0.2,1)',
+      }}
+    >
+      <span
+        className="absolute rounded-full shadow"
+        style={{
+          width: 16, height: 16, top: 4, left: value ? 24 : 4, background: '#fff',
+          transition: 'left .3s cubic-bezier(0.4,0,0.2,1)',
+        }}
+      />
+    </button>
+  );
+}
+
+function Card({ children, className = '', onClick, selected }) {
+  return (
+    <div onClick={onClick}
+      className={`rounded-2xl transition-all ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      style={{
+        background: selected ? 'rgba(235,244,255,0.92)' : 'rgba(255,255,255,0.82)',
+        border: selected ? '1.5px solid rgba(59,130,246,0.45)' : '1px solid rgba(90,130,200,0.18)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        boxShadow: selected ? '0 4px 24px rgba(59,130,246,0.14)' : '0 2px 16px rgba(30,60,120,0.07)',
+      }}>
+      {children}
+    </div>
+  );
+}
+
+function Steps({ cur, onStep }) {
+  const labels = ['프리셋', '내 정보', '투자 계획', '시나리오', '결과'];
+  return (
+    <div className="flex items-center justify-center gap-0 mb-8 overflow-x-auto pb-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+      {labels.map((s, i) => {
+        const clickable = i <= cur;
+        return (
+          <React.Fragment key={i}>
+            <div className="flex flex-col items-center flex-shrink-0"
+              style={{ cursor: clickable ? 'pointer' : 'default' }}
+              onClick={() => clickable && onStep && onStep(i)}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all`}
+                style={i < cur
+                  ? { background: 'linear-gradient(135deg,#3b82f6,#7c3aed)', color: '#fff' }
+                  : i === cur
+                    ? { background: 'linear-gradient(135deg,#3b82f6,#7c3aed)', color: '#fff', boxShadow: '0 0 0 4px rgba(99,102,241,0.25)' }
+                    : { background: 'rgba(90,130,200,0.12)', color: '#5575a0' }}>
+                {i < cur ? '✓' : i + 1}
+              </div>
+              <span className={`mt-1 text-xs whitespace-nowrap ${i === cur ? 'font-semibold' : ''}`}
+                style={{ color: i === cur ? '#2563eb' : clickable ? '#2c4068' : '#5575a0' }}>{s}</span>
+            </div>
+            {i < labels.length - 1 && (
+              <div className="h-px w-7 mx-1 mb-4 flex-shrink-0"
+                style={{ background: i < cur ? 'linear-gradient(to right,#3b82f6,#7c3aed)' : 'rgba(90,130,200,0.18)' }} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+// EventBlock: 최상위 컴포넌트로 분리 — InfoPage 내부 선언 시 상태 변경마다 unmount/remount되어 포커스 이탈 발생
+function EventBlock({ enabled, onToggle, icon, label, children }) {
+  return (
+    <div className="rounded-xl overflow-hidden"
+      style={{ border: '1px solid rgba(90,130,200,0.16)' }}>
+      <div className="flex items-center justify-between p-4 cursor-pointer"
+        style={{ background: enabled ? 'rgba(59,130,246,0.10)' : 'rgba(240,245,255,0.85)' }}
+        onClick={onToggle}>
+        <div className="flex items-center gap-2">
+          <span className="text-xl">{icon}</span>
+          <span className="font-semibold text-sm" style={{ color: enabled ? '#1d4ed8' : '#2c4068' }}>{label}</span>
+        </div>
+        <Toggle value={enabled} onChange={onToggle} />
+      </div>
+      <div className={`ev-body px-4 pb-4 pt-3 ${enabled ? 'open' : ''}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function NavRow({ onPrev, onNext, nextLabel = '다음 →', disabled }) {
+  return (
+    <div className="flex justify-between items-center pt-6 mt-4"
+      style={{ borderTop: '1px solid rgba(90,130,200,0.14)' }}>
+      {onPrev
+        ? <button onClick={onPrev} className="px-5 py-2.5 rounded-xl font-medium text-sm transition"
+            style={{ border: '1px solid rgba(90,130,200,0.22)', color: '#3d5580', background: 'rgba(255,255,255,0.75)' }}
+            onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.95)'}
+            onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,0.75)'}>
+            ← 이전
+          </button>
+        : <div />}
+      <button onClick={onNext} disabled={disabled}
+        className="px-6 py-2.5 rounded-xl font-semibold text-sm transition text-white"
+        style={disabled
+          ? { background: 'rgba(90,130,200,0.15)', color: 'rgba(30,50,100,0.35)', cursor: 'not-allowed' }
+          : { background: 'linear-gradient(135deg,#3b82f6,#7c3aed)', boxShadow: '0 4px 15px rgba(99,102,241,0.28)' }}>
+        {nextLabel}
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PRESETS
+// ─────────────────────────────────────────────
+const PRESETS = {
+  EMPTY: {
+    label: '직접 입력', icon: '✏️', desc: '모든 항목 직접 입력',
+    age: 30, retirementAge: 60, lifeExpectancy: 85,
+    earnedIncome: 0, financialIncome: 0, otherIncome: 0,
+    incomeGrowth: 3, inflation: 3, pensionStartAge: 65,
+    pensionOpYears: 0,
+    retirementExpenseEnabled: false, retirementExpenseAmount: 200,
+    assets: { cash: 0, domesticStock: 0, overseasStock: 0, bonds: 0, retirePension: 0, personalPension: 0, realEstate: 0 },
+    expenses: { living: 200, housing: 0, extra: 0 },
+    events: {
+      marriage:      { enabled: false, age: 32, cost: 5e7 },
+      children:      { enabled: false, count: 1, firstAge: 34, interval: 2, monthlyCost: 1e6, universityCost: 1e7, careYears: 20, birthAges: [34] },
+      parentSupport: { enabled: false, startAge: 45, monthly: 5e5, duration: 15 },
+    },
+    advanced: { pensionMonthly: 300000, insuranceMonthly: 200000, medicalAnnual: 1000000 },
+    spouseIncome: 3e7, spouseIncomeGrowth: 3, spouseRetirementAge: 60,
+    investMode: 'amount',
+    invest:         { cash: 0, domesticStock: 0, overseasStock: 0, bonds: 0, pension: 0 },
+    investPct:      { cash: 0, domesticStock: 0, overseasStock: 0, bonds: 0, pension: 0 },
+    spouseInvestMode: 'amount',
+    spouseInvest:    { cash: 0, domesticStock: 0, overseasStock: 0, bonds: 0, pension: 0 },
+    spouseInvestPct: { cash: 0, domesticStock: 0, overseasStock: 0, bonds: 0, pension: 0 },
+    returns: { cash: 3, domesticStock: 7, overseasStock: 8, bonds: 4, pension: 5, realEstate: 3 },
+  },
+  YOUNG: {
+    label: '사회초년생', icon: '🌱', desc: '27세, 연봉 3,600만',
+    age: 27, retirementAge: 60, lifeExpectancy: 85,
+    earnedIncome: 36e6, financialIncome: 5e5, otherIncome: 0,
+    incomeGrowth: 4, inflation: 3, pensionStartAge: 65,
+    pensionOpYears: 2,
+    retirementExpenseEnabled: false, retirementExpenseAmount: 120,
+    assets: { cash: 15e6, domesticStock: 3e6, overseasStock: 2e6, bonds: 0, retirePension: 2e6, personalPension: 0, realEstate: 0 },
+    expenses: { living: 150, housing: 60, extra: 30 },
+    events: {
+      marriage:      { enabled: false, age: 29, cost: 5e7 },
+      children:      { enabled: false, count: 1, firstAge: 31, interval: 2, monthlyCost: 1e6, universityCost: 1e7, careYears: 20, birthAges: [31] },
+      parentSupport: { enabled: false, startAge: 45, monthly: 5e5, duration: 15 },
+    },
+    advanced: { pensionMonthly: 200000, insuranceMonthly: 100000, medicalAnnual: 500000 },
+    spouseIncome: 3e7, spouseIncomeGrowth: 3, spouseRetirementAge: 60,
+    investMode: 'amount',
+    invest:         { cash: 200, domesticStock: 100, overseasStock: 100, bonds: 0, pension: 200 },
+    investPct:      { cash: 5, domesticStock: 3, overseasStock: 3, bonds: 0, pension: 5 },
+    spouseInvest:    { cash: 100, domesticStock: 50, overseasStock: 50, bonds: 0, pension: 100 },
+    spouseInvestPct: { cash: 5, domesticStock: 3, overseasStock: 3, bonds: 0, pension: 5 },
+    returns: { cash: 3, domesticStock: 7, overseasStock: 8, bonds: 4, pension: 5, realEstate: 3 },
+  },
+  MID: {
+    label: '안정기 직장인', icon: '🏠', desc: '38세, 연봉 6,000만',
+    age: 38, retirementAge: 60, lifeExpectancy: 85,
+    earnedIncome: 6e7, financialIncome: 1e6, otherIncome: 0,
+    incomeGrowth: 3, inflation: 3, pensionStartAge: 65,
+    pensionOpYears: 11,
+    retirementExpenseEnabled: false, retirementExpenseAmount: 250,
+    assets: { cash: 3e7, domesticStock: 3e7, overseasStock: 2e7, bonds: 1e7, retirePension: 1.5e7, personalPension: 5e6, realEstate: 4e8 },
+    expenses: { living: 250, housing: 100, extra: 50 },
+    events: {
+      marriage:      { enabled: true,  age: 32, cost: 5e7 },
+      children:      { enabled: true,  count: 1, firstAge: 34, interval: 2, monthlyCost: 1e6, universityCost: 1e7, careYears: 20, birthAges: [34] },
+      parentSupport: { enabled: false, startAge: 50, monthly: 5e5, duration: 15 },
+    },
+    advanced: { pensionMonthly: 300000, insuranceMonthly: 200000, medicalAnnual: 1000000 },
+    spouseIncome: 3e7, spouseIncomeGrowth: 3, spouseRetirementAge: 60,
+    investMode: 'amount',
+    invest:         { cash: 500, domesticStock: 300, overseasStock: 300, bonds: 100, pension: 300 },
+    investPct:      { cash: 5, domesticStock: 5, overseasStock: 5, bonds: 2, pension: 5 },
+    spouseInvest:    { cash: 200, domesticStock: 100, overseasStock: 100, bonds: 50, pension: 150 },
+    spouseInvestPct: { cash: 5, domesticStock: 5, overseasStock: 5, bonds: 2, pension: 5 },
+    returns: { cash: 3, domesticStock: 7, overseasStock: 8, bonds: 4, pension: 5, realEstate: 3 },
+  },
+  LATE: {
+    label: '은퇴 준비기', icon: '🌅', desc: '52세, 연봉 8,000만',
+    age: 52, retirementAge: 60, lifeExpectancy: 85,
+    earnedIncome: 8e7, financialIncome: 3e6, otherIncome: 0,
+    incomeGrowth: 2, inflation: 3, pensionStartAge: 65,
+    pensionOpYears: 24,
+    retirementExpenseEnabled: false, retirementExpenseAmount: 350,
+    assets: { cash: 5e7, domesticStock: 8e7, overseasStock: 5e7, bonds: 3e7, retirePension: 6e7, personalPension: 2e7, realEstate: 6e8 },
+    expenses: { living: 350, housing: 50, extra: 100 },
+    events: {
+      marriage:      { enabled: true,  age: 30, cost: 5e7 },
+      children:      { enabled: true,  count: 2, firstAge: 32, interval: 2, monthlyCost: 1e6, universityCost: 1e7, careYears: 20, birthAges: [32, 34] },
+      parentSupport: { enabled: true,  startAge: 50, monthly: 5e5, duration: 15 },
+    },
+    advanced: { pensionMonthly: 400000, insuranceMonthly: 300000, medicalAnnual: 2000000 },
+    spouseIncome: 3e7, spouseIncomeGrowth: 3, spouseRetirementAge: 60,
+    investMode: 'amount',
+    invest:         { cash: 1000, domesticStock: 500, overseasStock: 500, bonds: 300, pension: 500 },
+    investPct:      { cash: 5, domesticStock: 5, overseasStock: 5, bonds: 3, pension: 5 },
+    spouseInvest:    { cash: 300, domesticStock: 150, overseasStock: 150, bonds: 100, pension: 150 },
+    spouseInvestPct: { cash: 5, domesticStock: 5, overseasStock: 5, bonds: 3, pension: 5 },
+    returns: { cash: 3, domesticStock: 7, overseasStock: 8, bonds: 4, pension: 5, realEstate: 3 },
+  },
+};
+
+// ─────────────────────────────────────────────
+// PAGE 1 — PRESET
+// ─────────────────────────────────────────────
+function PresetPage({ inp, setInp, onNext }) {
+  const [sel, setSel] = useState(null);
+  return (
+    <div className="max-w-lg mx-auto">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold mb-2"
+          style={{ background: 'linear-gradient(135deg,#1d4ed8,#7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          생애 재무 시뮬레이터
+        </h1>
+        <p className="text-sm" style={{ color: '#4e6a92' }}>지금 이대로 살면, 내 돈은 어떻게 될까?</p>
+      </div>
+      <Card className="p-6">
+        <h2 className="text-base font-bold mb-1" style={{ color: '#1a2744' }}>프리셋 선택</h2>
+        <p className="text-xs mb-4" style={{ color: '#4e6a92' }}>비슷한 상황을 고르면 다음 단계 값이 자동 입력됩니다.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {Object.entries(PRESETS).map(([k, p]) => (
+            <div key={k} onClick={() => { setSel(k); setInp({ ...PRESETS[k] }); }}
+              className="p-4 rounded-xl cursor-pointer transition-all"
+              style={sel === k
+                ? { background: 'rgba(235,240,255,0.95)', border: '1.5px solid rgba(99,102,241,0.45)', boxShadow: '0 4px 18px rgba(99,102,241,0.14)' }
+                : { background: 'rgba(255,255,255,0.72)', border: '1.5px solid rgba(90,130,200,0.16)' }}>
+              <div className="text-2xl mb-1">{p.icon}</div>
+              <div className="font-bold text-sm" style={{ color: '#1a2744' }}>{p.label}</div>
+              <div className="text-xs mt-0.5" style={{ color: '#4e6a92' }}>{p.desc}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <NavRow onNext={onNext} nextLabel="다음 →" />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PAGE 2 — 내 정보 (기본 + 소득 + 자산 + 지출 + 이벤트)
+// ─────────────────────────────────────────────
+function InfoPage({ inp, setInp, onPrev, onNext }) {
+  const [advOpen, setAdvOpen] = useState(false);
+  const si  = (k, v)      => setInp(p => ({ ...p, [k]: v }));
+  const sa  = (k, v)      => setInp(p => ({ ...p, assets:   { ...p.assets,   [k]: v } }));
+  const se  = (k, v)      => setInp(p => ({ ...p, expenses: { ...p.expenses, [k]: v } }));
+  const sev = (ek, v)     => setInp(p => ({ ...p, events:   { ...p.events,   [ek]: { ...p.events[ek], ...v } } }));
+  const sad = (k, v)      => setInp(p => ({ ...p, advanced: { ...p.advanced, [k]: v } }));
+  const EV  = inp.events;
+
+  return (
+    <div className="max-w-xl mx-auto space-y-4">
+
+      {/* 기본 정보 */}
+      <Card className="p-5">
+        <h2 className="text-base font-bold text-gray-800 mb-4">기본 정보</h2>
+        <div className="grid grid-cols-3 gap-3">
+          <Num label="현재 나이"  value={inp.age}            onChange={v => si('age', v)}            unit="세" />
+          <Num label="은퇴 나이"  value={inp.retirementAge}  onChange={v => si('retirementAge', v)}  unit="세" />
+          <Num label="기대 수명"  value={inp.lifeExpectancy} onChange={v => si('lifeExpectancy', v)} unit="세" />
+        </div>
+      </Card>
+
+      {/* A. 소득 */}
+      <Card className="p-5">
+        <h2 className="text-base font-bold text-gray-800 mb-4">A. 소득 <span className="text-xs font-normal text-gray-400">연간</span></h2>
+        <div className="grid grid-cols-2 gap-3">
+          <Num label="근로소득"     value={Math.round(inp.earnedIncome   / 1e4)} onChange={v => si('earnedIncome',   v * 1e4)} unit="만원/년" />
+          <Num label="금융소득"     value={Math.round(inp.financialIncome/ 1e4)} onChange={v => si('financialIncome', v * 1e4)} unit="만원/년" />
+          <Num label="기타소득"     value={Math.round((inp.otherIncome||0)/1e4)} onChange={v => si('otherIncome',     v * 1e4)} unit="만원/년" />
+          <Num label="소득 상승률"  value={inp.incomeGrowth}                      onChange={v => si('incomeGrowth', v)}          unit="%" />
+        </div>
+      </Card>
+
+      {/* B. 자산 — 4행 × 2열 통합 그리드 */}
+      <Card className="p-5">
+        <h2 className="text-base font-bold text-gray-800 mb-4">B. 현재 자산</h2>
+        <div className="grid grid-cols-2 gap-3">
+          {/* 행 1 */}
+          <Num label="예금/현금"     value={Math.round(inp.assets.cash          / 1e4)} onChange={v => sa('cash',          v * 1e4)} unit="만원" />
+          <Num label="국내 주식"     value={Math.round(inp.assets.domesticStock / 1e4)} onChange={v => sa('domesticStock', v * 1e4)} unit="만원" />
+          {/* 행 2 */}
+          <Num label="해외 주식"     value={Math.round(inp.assets.overseasStock / 1e4)} onChange={v => sa('overseasStock', v * 1e4)} unit="만원" />
+          <Num label="채권/펀드"     value={Math.round(inp.assets.bonds         / 1e4)} onChange={v => sa('bonds',         v * 1e4)} unit="만원" />
+          {/* 행 3 */}
+          <Num label="부동산 (시가)" value={Math.round(inp.assets.realEstate    / 1e4)} onChange={v => sa('realEstate',    v * 1e4)} unit="만원" />
+          <Num
+            label="퇴직연금 누적액 (DC)"
+            value={Math.round((inp.assets.retirePension || 0) / 1e4)}
+            onChange={v => sa('retirePension', v * 1e4)}
+            unit="만원"
+            helper="회사가 적립한 DC형 퇴직연금 잔액."
+          />
+          {/* 행 4 */}
+          <Num
+            label="개인연금 납입액 (IRP/연금저축)"
+            value={Math.round((inp.assets.personalPension || 0) / 1e4)}
+            onChange={v => sa('personalPension', v * 1e4)}
+            unit="만원"
+            helper="직접 납입한 IRP·연금저축 잔액."
+          />
+          <Num
+            label="퇴직연금 기존 운용 기간"
+            value={inp.pensionOpYears || 0}
+            onChange={v => si('pensionOpYears', Math.max(0, v))}
+            unit="년"
+            helper="현재까지 DC퇴직연금을 납입한 기간(근속연수)."
+          />
+        </div>
+        <p className="text-xs text-gray-400 mt-3">※ 현재 보유 시가 기준 입력. 자산별 수익률은 다음 페이지에서 설정합니다.</p>
+      </Card>
+
+      {/* C. 지출 */}
+      <Card className="p-5">
+        <h2 className="text-base font-bold text-gray-800 mb-4">C. 지출 <span className="text-xs font-normal text-gray-400">월간</span></h2>
+        <div className="grid grid-cols-3 gap-3">
+          <Num label="생활비"   value={inp.expenses.living}  onChange={v => se('living',  v)} unit="만원/월" />
+          <Num label="주거비"   value={inp.expenses.housing} onChange={v => se('housing', v)} unit="만원/월" />
+          <Num label="기타 고정" value={inp.expenses.extra}   onChange={v => se('extra',   v)} unit="만원/월" />
+        </div>
+        <p className="text-xs text-blue-500 mt-3">💡 모든 지출은 물가상승률(3페이지 설정)에 연동해 매년 자동 증가합니다. 예: 250만원 × 3% 10년 → 약 336만원</p>
+      </Card>
+
+      {/* D. 라이프 이벤트 */}
+      <Card className="p-5">
+        <h2 className="text-base font-bold text-gray-800 mb-4">D. 라이프 이벤트</h2>
+        <div className="space-y-3">
+
+          <EventBlock enabled={EV.marriage.enabled} onToggle={() => sev('marriage', { enabled: !EV.marriage.enabled })} icon="💍" label="결혼">
+            <div className="grid grid-cols-2 gap-3">
+              <Num label="결혼 나이 (내 나이)"          value={EV.marriage.age}                                onChange={v => sev('marriage', { age: v })}           unit="세" />
+              <Num label="결혼 비용"                    value={Math.round(EV.marriage.cost / 1e4)}              onChange={v => sev('marriage', { cost: v * 1e4 })}   unit="만원" />
+              <Num label="배우자 소득"                  value={Math.round((inp.spouseIncome || 3e7) / 1e4)}     onChange={v => si('spouseIncome', v * 1e4)}           unit="만원/년" />
+              <Num label="배우자 소득 증가율"            value={inp.spouseIncomeGrowth ?? 3}                     onChange={v => si('spouseIncomeGrowth', v)}           unit="%" helper="결혼 시점부터 매년 증가" />
+              <Num label="배우자 퇴직 나이 (내 나이)"   value={inp.spouseRetirementAge ?? (inp.retirementAge || 60)} onChange={v => si('spouseRetirementAge', v)}   unit="세" helper="이 나이까지 배우자 소득 반영" />
+              <Num label="결혼 후 추가 지출"             value={EV.marriage.extraMonthlyExpense ?? 0}            onChange={v => sev('marriage', { extraMonthlyExpense: v })} unit="만원/월" helper="결혼 후 늘어나는 공동 생활비·통신비 등" />
+            </div>
+            <p className="text-xs text-blue-500 mt-2">💡 결혼 후 추가 지출은 매년 물가상승률이 반영되어 기본 지출과 별도로 합산됩니다.</p>
+          </EventBlock>
+
+          <EventBlock enabled={EV.children.enabled} onToggle={() => sev('children', { enabled: !EV.children.enabled })} icon="👶" label="자녀">
+            {/* 자녀 수 버튼 */}
+            <div className="mb-4">
+              <span className="text-sm font-medium text-gray-700 block mb-2">자녀 수</span>
+              <div className="flex gap-2">
+                {[1,2,3,4,5,6].map(n => (
+                  <button key={n} type="button"
+                    onClick={() => {
+                      const cur = EV.children.birthAges || [EV.children.firstAge || 30];
+                      let next;
+                      if (n > cur.length) {
+                        next = [...cur];
+                        while (next.length < n) next.push(next[next.length - 1] + 2);
+                      } else {
+                        next = cur.slice(0, n);
+                      }
+                      sev('children', { count: n, birthAges: next, firstAge: next[0] });
+                    }}
+                    className={`w-9 h-9 rounded-full text-sm font-bold border-2 transition
+                      ${EV.children.count === n
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'}`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* 자녀별 출산 나이 */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {(() => {
+                const ordinals = ['첫째','둘째','셋째','넷째','다섯째','여섯째'];
+                const ages = EV.children.birthAges ||
+                  Array.from({ length: EV.children.count || 1 }, (_, i) =>
+                    (EV.children.firstAge || 30) + i * 2);
+                return Array.from({ length: EV.children.count || 1 }).map((_, c) => (
+                  <Num key={c}
+                    label={`${ordinals[c]} 출산 나이`}
+                    value={ages[c] ?? ((EV.children.firstAge || 30) + c * 2)}
+                    onChange={v => {
+                      const newAges = [...(EV.children.birthAges ||
+                        Array.from({ length: EV.children.count || 1 }, (_, i) =>
+                          (EV.children.firstAge || 30) + i * 2))];
+                      newAges[c] = v;
+                      sev('children', { birthAges: newAges, firstAge: newAges[0] });
+                    }}
+                    unit="세"
+                  />
+                ));
+              })()}
+            </div>
+            {/* 공통 항목 */}
+            <div className="grid grid-cols-2 gap-3">
+              <Num label="양육비 (1인)"    value={Math.round(EV.children.monthlyCost / 1e4)}    onChange={v => sev('children', { monthlyCost: v * 1e4 })}    unit="만원/월" />
+              <Num label="대학 교육비"     value={Math.round(EV.children.universityCost / 1e4)} onChange={v => sev('children', { universityCost: v * 1e4 })} unit="만원/년" />
+              <Num label="양육 기간 (1인)" value={EV.children.careYears ?? 20}                  onChange={v => sev('children', { careYears: v })}            unit="년" helper="출생 후 몇 년간 양육비 지출" />
+            </div>
+            <p className="text-xs text-blue-500 mt-2">💡 양육비·교육비도 매년 물가상승률이 반영됩니다.</p>
+          </EventBlock>
+
+          <EventBlock enabled={EV.parentSupport.enabled} onToggle={() => sev('parentSupport', { enabled: !EV.parentSupport.enabled })} icon="👴" label="부모 부양">
+            <div className="grid grid-cols-3 gap-3">
+              <Num label="내 나이 (시작)" value={EV.parentSupport.startAge}                  onChange={v => sev('parentSupport', { startAge: v })}           unit="세" helper="부양을 시작하는 내 나이" />
+              <Num label="부양비"          value={Math.round(EV.parentSupport.monthly / 1e4)} onChange={v => sev('parentSupport', { monthly: v * 1e4 })}      unit="만원/월" />
+              <Num label="기간"            value={EV.parentSupport.duration}                  onChange={v => sev('parentSupport', { duration: v })}           unit="년" />
+            </div>
+            <p className="text-xs text-blue-500 mt-2">💡 부양비도 매년 물가상승률이 반영됩니다.</p>
+          </EventBlock>
+
+        </div>
+      </Card>
+
+      {/* E. 고급 설정 */}
+      <Card className="p-5">
+        <button onClick={() => setAdvOpen(!advOpen)} className="w-full flex items-center justify-between text-base font-bold text-gray-800">
+          <span>E. 세액공제 항목 (선택)</span>
+          <span className="text-gray-400 text-xs">{advOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+        </button>
+        <div className={`adv-body mt-4 ${advOpen ? 'open' : ''}`}>
+          <div className="grid grid-cols-2 gap-3">
+            <Num label="연금저축 납입" value={Math.round((inp.advanced?.pensionMonthly   || 300000) / 1e4)} onChange={v => sad('pensionMonthly',   v * 1e4)} unit="만원/월" />
+            <Num label="보장성 보험료" value={Math.round((inp.advanced?.insuranceMonthly || 200000) / 1e4)} onChange={v => sad('insuranceMonthly', v * 1e4)} unit="만원/월" />
+            <Num label="의료비 (연간)" value={Math.round((inp.advanced?.medicalAnnual    || 1000000)/ 1e4)} onChange={v => sad('medicalAnnual',     v * 1e4)} unit="만원/년" />
+            <Num label="국민연금 수령 나이" value={inp.pensionStartAge || 65}                               onChange={v => si('pensionStartAge', v)}          unit="세" />
+          </div>
+        </div>
+      </Card>
+
+      <NavRow onPrev={onPrev} onNext={onNext} />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PAGE 3 — 투자 계획 (연간 투자액 + 자산별 수익률 + 물가)
+// ─────────────────────────────────────────────
+function InvestPage({ inp, setInp, onPrev, onNext }) {
+  const si   = (k, v)  => setInp(p => ({ ...p, [k]: v }));
+  const sv   = (k, v)  => setInp(p => ({ ...p, invest:          { ...p.invest,          [k]: v } }));
+  const svp  = (k, v)  => setInp(p => ({ ...p, investPct:       { ...p.investPct,       [k]: v } }));
+  const ssv  = (k, v)  => setInp(p => ({ ...p, spouseInvest:    { ...p.spouseInvest,    [k]: v } }));
+  const ssvp = (k, v)  => setInp(p => ({ ...p, spouseInvestPct: { ...p.spouseInvestPct, [k]: v } }));
+  const sr   = (k, v)  => setInp(p => ({ ...p, returns:         { ...p.returns,         [k]: v } }));
+  const I   = inp.invest          || {};
+  const IP  = inp.investPct       || {};
+  const SI  = inp.spouseInvest    || {};
+  const SIP = inp.spouseInvestPct || {};
+  const R   = inp.returns         || {};
+  const mode = inp.investMode || 'amount';
+
+  const marriageEnabled   = inp.events?.marriage?.enabled;
+  const marriageAge       = inp.events?.marriage?.age || 999;
+  const showSpouseSection = marriageEnabled;
+  const spouseMode        = inp.spouseInvestMode || 'amount';
+
+  const assetRows = [
+    { key: 'cash',          label: '예금/현금',        rKey: 'cash',          defR: 3 },
+    { key: 'domesticStock', label: '국내 주식',         rKey: 'domesticStock', defR: 7 },
+    { key: 'overseasStock', label: '해외 주식',         rKey: 'overseasStock', defR: 8 },
+    { key: 'bonds',         label: '채권/펀드',         rKey: 'bonds',         defR: 4 },
+    { key: 'pension',       label: '개인연금 (IRP/연금저축)', rKey: 'pension', defR: 5, note: '퇴직연금 DC는 별도 자동 적립' },
+  ];
+
+  const autoRetirePension = Math.round((inp.earnedIncome || 0) / 1e4 / 12);
+
+  // 금액 모드 합계 (본인)
+  const totalInvest = assetRows.reduce((s, a) => s + (I[a.key] || 0), 0);
+  const grandTotal  = totalInvest + autoRetirePension;
+
+  // 퍼센트 모드 합계 (가용액 기준)
+  const totalPct  = assetRows.reduce((s, a) => s + (IP[a.key] || 0), 0);
+
+  // 배우자 금액/퍼센트 합계
+  const totalSpouseInvest = assetRows.reduce((s, a) => s + (SI[a.key] || 0), 0);
+  const totalSpousePct    = assetRows.reduce((s, a) => s + (SIP[a.key] || 0), 0);
+  const spouseIncomeMan   = Math.round((inp.spouseIncome || 0) / 1e4);
+  const spousePctAmount   = Math.round(spouseIncomeMan * totalSpousePct / 100);
+  // 배우자 세후 소득 추정
+  const spouseAfterTaxRaw   = Math.max(0, (inp.spouseIncome || 0) - roughTax(inp.spouseIncome || 0, false, 0));
+  const spouseAfterTaxMan   = Math.round(spouseAfterTaxRaw / 1e4);
+  const spouseAfterTaxMonth = Math.round(spouseAfterTaxRaw / 12 / 1e4);
+
+  // ── 투자 가용 자산 계산 (현재 연도 기준 간이 추정) ──
+  // 소득: 배우자 소득은 결혼 나이 이후에만 포함
+  const annualEarned       = inp.earnedIncome || 0;
+  const isCurrentlyMarried = marriageEnabled && inp.age >= marriageAge;
+  // 지출 (월 → 연, 만원 → 원)
+  const annualExpenses = ((inp.expenses?.living || 0) + (inp.expenses?.housing || 0) + (inp.expenses?.extra || 0)) * 12 * 1e4;
+  // 세금 간이 추정
+  function roughTax(sal, isMarried, cCount) {
+    if (sal <= 0) return 0;
+    let ded = 0;
+    if (sal <= 5e6)   ded = sal * .70;
+    else if (sal <= 15e6) ded = 3500000  + (sal - 5e6)  * .40;
+    else if (sal <= 45e6) ded = 7500000  + (sal - 15e6) * .15;
+    else if (sal <= 100e6) ded = 12000000 + (sal - 45e6) * .05;
+    else ded = 14750000 + (sal - 100e6) * .02;
+    const pDed = 1500000 + (isMarried ? 1500000 : 0) + (cCount || 0) * 1500000;
+    const social = Math.min(sal / 12, 6370000) * .0475 * 12 + sal * .03595 + sal * .03595 * .1314 + sal * .009;
+    const base = Math.max(0, sal - ded - pDed - social);
+    let tax = 0;
+    const brackets = [[14e6,.06,0],[50e6,.15,1260000],[88e6,.24,5760000],[150e6,.35,15440000],[300e6,.38,19940000],[500e6,.40,25940000],[1e9,.42,35940000],[Infinity,.45,65940000]];
+    for (const [lim,rate,d] of brackets) if (base <= lim) { tax = base * rate - d; break; }
+    return Math.round(social + tax * 1.1);
+  }
+  const childCountNow   = inp.events?.children?.enabled ? (inp.events.children.count || 1) : 0;
+  // 현재 (본인 소득만, 결혼 전이면 미혼 기준)
+  const estimatedTax    = roughTax(annualEarned, isCurrentlyMarried, isCurrentlyMarried ? childCountNow : 0);
+  const availableRaw    = annualEarned - annualExpenses - estimatedTax;
+  const availableMan    = Math.round(availableRaw / 1e4);
+  const availableMonth  = Math.round(availableRaw / 12 / 1e4);
+  // pct mode: % of available income
+  const pctAmount = Math.round(Math.max(0, availableMan) * totalPct / 100);
+  // 결혼 후 추가 지출 (연간, 원)
+  const marriageExtraMonthly = marriageEnabled ? ((inp.events?.marriage?.extraMonthlyExpense || 0) * 1e4) : 0;
+  const marriageExtraAnnual  = marriageExtraMonthly * 12;
+  // 배우자 투자 가용액: 세후 소득 - 결혼 후 추가 지출
+  const spouseAvailableRaw   = spouseAfterTaxRaw - marriageExtraAnnual;
+  const spouseAvailableMan   = Math.round(spouseAvailableRaw / 1e4);
+  const spouseAvailableMonth = Math.round(spouseAvailableRaw / 12 / 1e4);
+  const spousePctAmountAvail = Math.round(Math.max(0, spouseAvailableMan) * totalSpousePct / 100);
+
+  return (
+    <div className="max-w-xl mx-auto space-y-4">
+
+      {/* 투자 가용 자산 요약 카드 */}
+      <Card className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100">
+        <div className="text-xs font-bold text-blue-700 mb-2">
+          💰 투자 가용액 (간이 추정) — 본인 소득 기준{isCurrentlyMarried ? ' (현재 기혼)' : ''}
+        </div>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div>
+            <div className="text-xs text-gray-500 mb-0.5">연간 본인 소득</div>
+            <div className="font-bold text-gray-800 text-sm">{Math.round(annualEarned / 1e4).toLocaleString()}만원</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 mb-0.5">지출+세금 (추정)</div>
+            <div className="font-bold text-red-500 text-sm">-{Math.round((annualExpenses + estimatedTax) / 1e4).toLocaleString()}만원</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 mb-0.5">본인 투자 가용액</div>
+            <div className={`font-bold text-lg ${availableMan >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{availableMan >= 0 ? '' : '-'}{Math.abs(availableMan).toLocaleString()}만원</div>
+          </div>
+        </div>
+        {availableMan > 0 && (
+          <div className="mt-1.5 text-center text-xs text-blue-600">월 약 {availableMonth.toLocaleString()}만원 · 2페이지 소득/지출 기준 간이 계산</div>
+        )}
+        {availableMan < 0 && (
+          <div className="mt-1.5 text-center text-xs text-red-500">현재 소득으로 지출+세금을 충당하기 어려운 상태입니다. 2페이지 입력값을 확인하세요.</div>
+        )}
+      </Card>
+
+      {/* 연간 투자 계획 */}
+      <Card className="p-5">
+        <h2 className="text-base font-bold text-gray-800 mb-1">A. 매년 투자 계획</h2>
+        <p className="text-xs text-gray-400 mb-3">소득에서 지출·세금을 뺀 나머지 중 얼마를 어디에 투자할지 설정하세요.</p>
+
+        {/* 입력 방식 탭 */}
+        <div className="flex gap-1 p-1 rounded-xl mb-4"
+          style={{ background:'rgba(90,130,200,0.10)' }}>
+          {[['amount', '금액 직접 입력'], ['pct', '가용액의 퍼센트 (%)']].map(([m, lbl]) => (
+            <button key={m} onClick={() => si('investMode', m)}
+              className="flex-1 py-1.5 text-xs font-semibold rounded-lg transition"
+              style={mode === m
+                ? { background:'linear-gradient(135deg,#3b82f6,#7c3aed)', color:'#fff', boxShadow:'0 2px 8px rgba(99,102,241,0.25)' }
+                : { color:'#3d5580', background:'transparent' }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'pct' && (
+          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-3">
+            💡 가용액(소득 − 지출 − 세금) 대비 투자 비율을 설정합니다. 소득이 늘수록 투자금도 자동 증가합니다.
+          </p>
+        )}
+
+        <div className="space-y-3">
+          {assetRows.map(a => (
+            <div key={a.key} className="flex items-center gap-3">
+              <span className="text-sm text-gray-700 w-28 flex-shrink-0">{a.label}</span>
+              <div className="flex-1">
+                {mode === 'amount'
+                  ? <Num label="" value={I[a.key] ?? 0} onChange={v => sv(a.key, v)} unit="만원/년" />
+                  : <Num label="" value={IP[a.key] ?? 0} onChange={v => svp(a.key, v)} unit="%" />
+                }
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 p-3 bg-blue-50 rounded-xl">
+          {mode === 'amount' ? (
+            <>
+              <div className="flex justify-between items-baseline">
+                <span className="text-sm font-medium text-blue-700">연간 총 계획 투자액</span>
+                <span className="text-base font-bold text-blue-700">{grandTotal.toLocaleString()}만원</span>
+              </div>
+              <div className="text-xs text-blue-500 mt-1 text-right">
+                퇴직연금 자동 적립 {autoRetirePension.toLocaleString()}만원 + 개인투자 {totalInvest.toLocaleString()}만원
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between items-baseline">
+                <span className="text-sm font-medium text-blue-700">가용액 기준 연간 투자액</span>
+                <span className="text-base font-bold text-blue-700">가용액의 {totalPct}% ({pctAmount.toLocaleString()}만원)</span>
+              </div>
+              <div className="text-xs text-blue-500 mt-1 text-right">
+                가용액 {Math.max(0, availableMan).toLocaleString()}만원 × {totalPct}% | 퇴직연금 {autoRetirePension.toLocaleString()}만원 별도
+              </div>
+            </>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mt-2">※ 퇴직연금은 연봉 ÷ 12씩 자동 적립 후 퇴직 시 세후 수령. 계획 투자액을 뺀 나머지는 <strong>예금/현금</strong>으로 자동 적립됩니다.</p>
+      </Card>
+
+      {/* 배우자 투자 계획 — 결혼 이벤트가 켜진 경우에만 표시 */}
+      {showSpouseSection && (
+        <Card className="p-5 border-indigo-100">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base font-bold text-gray-800">A-2. 배우자 투자 계획</span>
+            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">
+              {marriageAge}세 결혼 이후 적용
+            </span>
+          </div>
+          {/* 배우자 소득 + 세후 요약 */}
+          <div className="bg-indigo-50 rounded-xl px-4 py-3 mb-3 space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">배우자 세전 소득</span>
+              <span className="font-semibold text-gray-700">{spouseIncomeMan.toLocaleString()}만원/년</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">세금·4대보험 추정</span>
+              <span className="font-semibold text-red-500">−{(spouseIncomeMan - spouseAfterTaxMan).toLocaleString()}만원</span>
+            </div>
+            {marriageExtraAnnual > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">결혼 후 추가 지출 (연간)</span>
+                <span className="font-semibold text-orange-500">−{Math.round(marriageExtraAnnual / 1e4).toLocaleString()}만원</span>
+              </div>
+            )}
+            <div className="flex justify-between text-xs border-t border-indigo-200 pt-1">
+              <span className="text-indigo-700 font-bold">{marriageExtraAnnual > 0 ? '배우자 투자 가용액' : '세후 추정 소득'}</span>
+              <span className="font-bold text-indigo-700">{spouseAvailableMan.toLocaleString()}만원/년 (월 약 {spouseAvailableMonth.toLocaleString()}만원)</span>
+            </div>
+            <p className="text-xs text-gray-400 pt-0.5">※ 미혼 단독 기준 간이 추정. 실제 세액은 합산 과세 방식에 따라 달라질 수 있습니다.</p>
+          </div>
+          {!isCurrentlyMarried && (
+            <p className="text-xs text-gray-400 mb-3">{marriageAge}세 이전에는 시뮬레이션에 반영되지 않습니다.</p>
+          )}
+
+          {/* 배우자 전용 모드 탭 */}
+          <div className="flex gap-1 p-1 rounded-xl mb-4"
+            style={{ background:'rgba(90,130,200,0.10)' }}>
+            {[['amount', '금액 직접 입력'], ['pct', '배우자 가용액의 % (%)']].map(([m, lbl]) => (
+              <button key={m} onClick={() => si('spouseInvestMode', m)}
+                className="flex-1 py-1.5 text-xs font-semibold rounded-lg transition"
+                style={spouseMode === m
+                  ? { background:'linear-gradient(135deg,#6366f1,#7c3aed)', color:'#fff', boxShadow:'0 2px 8px rgba(99,102,241,0.3)' }
+                  : { color:'#3d5580', background:'transparent' }}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+
+          {spouseMode === 'pct' && (
+            <p className="text-xs text-indigo-600 bg-indigo-50 rounded-lg px-3 py-2 mb-3">
+              💡 배우자 투자 가용액({spouseAvailableMan.toLocaleString()}만원/년) 기준. 소득 상승률에 따라 투자금도 자동 증가합니다.
+            </p>
+          )}
+
+          <div className="space-y-3">
+            {assetRows.map(a => (
+              <div key={a.key} className="flex items-center gap-3">
+                <span className="text-sm text-gray-700 w-28 flex-shrink-0">{a.label}</span>
+                <div className="flex-1">
+                  {spouseMode === 'amount'
+                    ? <Num label="" value={SI[a.key] ?? 0} onChange={v => ssv(a.key, v)} unit="만원/년" />
+                    : <Num label="" value={SIP[a.key] ?? 0} onChange={v => ssvp(a.key, v)} unit="%" />
+                  }
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 p-3 bg-indigo-50 rounded-xl">
+            {spouseMode === 'amount' ? (
+              <>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-sm font-medium text-indigo-700">배우자 연간 투자 계획액</span>
+                  <span className="text-base font-bold text-indigo-700">{(totalSpouseInvest + Math.round(spouseIncomeMan / 12)).toLocaleString()}만원</span>
+                </div>
+                <div className="text-xs text-indigo-500 mt-1 text-right">
+                  퇴직연금 자동 적립 {Math.round(spouseIncomeMan / 12).toLocaleString()}만원 + 개인투자 {totalSpouseInvest.toLocaleString()}만원
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-sm font-medium text-indigo-700">배우자 가용액 기준 연간 투자액</span>
+                  <span className="text-base font-bold text-indigo-700">가용액의 {totalSpousePct}% ({spousePctAmountAvail.toLocaleString()}만원)</span>
+                </div>
+                <div className="text-xs text-indigo-500 mt-1 text-right">
+                  배우자 투자 가용액 {spouseAvailableMan.toLocaleString()}만원 × {totalSpousePct}% | 퇴직연금 {Math.round(spouseIncomeMan / 12).toLocaleString()}만원 별도
+                </div>
+              </>
+            )}
+            <div className="text-xs text-indigo-500 mt-1 text-right">
+              {isCurrentlyMarried ? '현재부터 적용 중' : `${marriageAge}세부터 시뮬레이션에 반영`}
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">※ 배우자 퇴직연금도 동일하게 자동 적립 후 퇴직 시 세후 수령. 계획 투자액을 뺀 나머지는 <strong>예금/현금</strong>으로 자동 적립됩니다.</p>
+          {marriageExtraAnnual === 0 && (
+            <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mt-2">
+              ⚠️ 결혼 후 늘어나는 공동 생활비가 있다면 2페이지 결혼 이벤트에서 <strong>결혼 후 추가 지출</strong>을 입력하세요. 배우자 투자 가용액에서 자동 차감됩니다.
+            </p>
+          )}
+        </Card>
+      )}
+
+      {/* 자산별 연간 수익률 */}
+      <Card className="p-5">
+        <h2 className="text-base font-bold text-gray-800 mb-4">B. 자산별 연평균 수익률</h2>
+        <div className="space-y-3">
+          {assetRows.map(a => (
+            <div key={a.rKey}>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-700 w-28 flex-shrink-0">{a.label}</span>
+                <div className="flex-1">
+                  <Slider label="" value={R[a.rKey] ?? a.defR} onChange={v => sr(a.rKey, v)} min={-10} max={30} step={0.5} />
+                </div>
+              </div>
+              {a.note && (
+                <p className="text-xs text-blue-500 mt-1 ml-1">💡 {a.note}</p>
+              )}
+            </div>
+          ))}
+          {/* 부동산 수익률 */}
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-700 w-28 flex-shrink-0">부동산</span>
+            <div className="flex-1">
+              <Slider label="" value={R.realEstate ?? 3} onChange={v => sr('realEstate', v)} min={-5} max={20} step={0.5} />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* 물가 상승률 */}
+      <Card className="p-5">
+        <h2 className="text-base font-bold text-gray-800 mb-4">C. 물가 상승률</h2>
+        <Slider label="인플레이션" value={inp.inflation ?? 3} onChange={v => si('inflation', v)} min={0} max={15} step={0.5} />
+        <div className="flex gap-2 flex-wrap mt-3">
+          {[['안정기', 2.5], ['보통', 3.5], ['상승기', 5.5], ['위기', 8]].map(([l, v]) => (
+            <button key={l} onClick={() => si('inflation', v)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition
+                ${inp.inflation === v ? 'bg-orange-500 text-white border-orange-500' : 'text-gray-600 border-gray-200 hover:border-orange-300'}`}>
+              {l} ({v}%)
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      {/* 은퇴 후 지출 설정 */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-bold text-gray-800">D. 은퇴 후 지출 감소 반영</h2>
+            <p className="text-xs text-gray-400 mt-0.5">은퇴 후 실제 지출이 달라지는 경우 직접 입력하세요.</p>
+          </div>
+          <Toggle value={inp.retirementExpenseEnabled ?? false} onChange={v => si('retirementExpenseEnabled', v)} />
+        </div>
+        {inp.retirementExpenseEnabled ? (
+          <>
+            <Num
+              label="은퇴 후 월 총지출 (현재 가치 기준)"
+              value={inp.retirementExpenseAmount ?? 200}
+              onChange={v => si('retirementExpenseAmount', v)}
+              unit="만원/월"
+            />
+            <p className="text-xs text-gray-400 mt-2">
+              ※ 지금 입력한 금액이 현재 가치 기준입니다. 물가상승률이 매년 반영되어 은퇴 시점의 실제 지출로 자동 계산됩니다.<br />
+              예: 200만원 입력 + 3% 물가 22년 → 은퇴 시점 약 {Math.round(200 * Math.pow(1.03, Math.max(0, (inp.retirementAge || 60) - (inp.age || 30))))}만원/월 적용
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-gray-400">
+            ※ 토글이 꺼진 상태에서는 2페이지에서 입력한 생활비·주거비·기타 지출이 물가상승률과 함께 은퇴 후에도 동일하게 유지됩니다.<br />
+            은퇴 후 지출이 현저히 달라진다면 (예: 주거비 감소, 자녀 독립 등) 토글을 켜고 직접 입력하세요.
+          </p>
+        )}
+      </Card>
+
+      <NavRow onPrev={onPrev} onNext={onNext} />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PAGE 4 — 시나리오
+// ─────────────────────────────────────────────
+
+const WITHDRAW_ASSET_META = [
+  { key: 'cash',          label: '예금/현금',   color: '#93c5fd', note: '원금 보장, 패널티 없음' },
+  { key: 'bonds',         label: '채권/펀드',   color: '#2dd4bf', note: '중·저위험 자산' },
+  { key: 'domesticStock', label: '국내 주식',   color: '#86efac', note: '매도 시 국내 주식 양도세 없음(일반)' },
+  { key: 'overseasStock', label: '해외 주식',   color: '#fde68a', note: '매도 차익 양도세 22% 과세' },
+  { key: 'pension',       label: '개인연금 (IRP)', color: '#c4b5fd', note: '55세 이전 중도인출 시 기타소득세 16.5% (퇴직연금 DC 별도)' },
+  { key: 'realEstate',    label: '부동산',       color: '#2c4068', note: '매각 시 양도소득세 적용' },
+];
+
+function WithdrawalOrderSection({ inp, setInp }) {
+  const DEFAULT_ORDER = ['cash', 'bonds', 'domesticStock', 'overseasStock', 'pension', 'realEstate'];
+  const order = inp.withdrawalOrder || DEFAULT_ORDER;
+
+  const move = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= order.length) return;
+    const next = [...order];
+    [next[i], next[j]] = [next[j], next[i]];
+    setInp(p => ({ ...p, withdrawalOrder: next }));
+  };
+
+  return (
+    <Card className="p-5">
+      <h3 className="text-base font-bold text-gray-800 mb-1">은퇴 후 자산 인출 우선순위</h3>
+      <p className="text-xs text-gray-400 mb-4">
+        수입이 지출보다 부족할 때 어떤 자산부터 꺼낼지 순서를 정하세요.
+        위에 있을수록 먼저 인출됩니다. 부동산도 자유롭게 순서 조정 가능합니다.
+      </p>
+      <div className="space-y-2">
+        {order.map((key, i) => {
+          const meta = WITHDRAW_ASSET_META.find(a => a.key === key) || { label: key, color: '#4e6a92', note: '' };
+          return (
+            <div key={key} className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
+              <span className="text-xs font-bold text-gray-400 w-5 text-center">{i + 1}</span>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: meta.color, display: 'inline-block', flexShrink: 0 }} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-gray-700">{meta.label}</div>
+                <div className="text-xs text-gray-400 truncate">{meta.note}</div>
+              </div>
+              <div className="flex gap-1 flex-shrink-0">
+                <button onClick={() => move(i, -1)} disabled={i === 0}
+                  className="w-7 h-7 rounded-lg text-sm font-bold transition flex items-center justify-center"
+                  style={i === 0
+                    ? { color:'rgba(90,130,200,0.28)', background:'rgba(90,130,200,0.07)', cursor:'not-allowed' }
+                    : { color:'#3d5580', background:'rgba(255,255,255,0.80)', border:'1px solid rgba(90,130,200,0.22)' }}>
+                  ↑
+                </button>
+                <button onClick={() => move(i, 1)} disabled={i === order.length - 1}
+                  className="w-7 h-7 rounded-lg text-sm font-bold transition flex items-center justify-center"
+                  style={i === order.length - 1
+                    ? { color:'rgba(90,130,200,0.28)', background:'rgba(90,130,200,0.07)', cursor:'not-allowed' }
+                    : { color:'#3d5580', background:'rgba(255,255,255,0.80)', border:'1px solid rgba(90,130,200,0.22)' }}>
+                  ↓
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-xs text-blue-500 mt-3">
+        💡 연금 계좌를 뒤로 미룰수록 복리 운용 기간이 늘어나 은퇴 후 수령액이 커집니다. 단, 55세 이전 인출 시 기타소득세(16.5%) 패널티가 발생합니다.
+        부동산을 앞으로 당기면 현금화가 먼저 이루어지지만 양도소득세가 적용됩니다.
+      </p>
+      <button onClick={() => setInp(p => ({ ...p, withdrawalOrder: [...DEFAULT_ORDER] }))}
+        className="mt-3 text-xs text-gray-400 underline hover:text-gray-600 transition">
+        기본 순서로 초기화
+      </button>
+    </Card>
+  );
+}
+
+const SC_INFO = {
+  BASELINE: {
+    label: '기존 추세',
+    icon:  '📊',
+    desc:  '입력한 수익률과 소득 성장률이 그대로 유지됩니다. 외부 충격 없음.',
+    tags:  [],
+  },
+  CYCLES: {
+    label: '주기적 경기침체',
+    icon:  '📉',
+    desc:  '5년마다 1년간 경기침체가 발생합니다. 주식 −15%p, 소득 −10%, 지출 +3%.',
+    tags:  ['5·10·15·20년차 침체 (1년)', '주식 −15%p', '소득 −10%', '지출 +3%'],
+  },
+  CRASH: {
+    label: '침체 + 주기적 대공황',
+    icon:  '💥',
+    desc:  '5·10·15년차는 침체, 20년마다 대공황. 이 패턴이 시뮬레이션 전 기간 반복됩니다.',
+    tags:  ['5·10·15년차: 침체 (반복)', '20·40·60년차: 전 자산 −20% 대공황', '대공황 연도: 소득 −40%', '대공황 연도: 지출 +10%'],
+  },
+};
+
+function ScenarioPage({ scenario, setScenario, inp, setInp, onPrev, onNext }) {
+  const selStyle = {
+    BASELINE: { background:'rgba(235,244,255,0.95)',  border:'1.5px solid rgba(59,130,246,0.40)',  boxShadow:'0 4px 18px rgba(59,130,246,0.12)' },
+    CYCLES:   { background:'rgba(255,248,235,0.95)',  border:'1.5px solid rgba(245,158,11,0.40)',  boxShadow:'0 4px 18px rgba(245,158,11,0.12)' },
+    CRASH:    { background:'rgba(255,242,242,0.95)',  border:'1.5px solid rgba(239,68,68,0.38)',   boxShadow:'0 4px 18px rgba(239,68,68,0.12)' },
+  };
+  const defStyle = { background:'rgba(255,255,255,0.72)', border:'1.5px solid rgba(90,130,200,0.16)' };
+  return (
+    <div className="max-w-xl mx-auto space-y-4">
+      <div className="text-center mb-3">
+        <h2 className="text-2xl font-bold mb-1"
+          style={{ background:'linear-gradient(135deg,#1d4ed8,#7c3aed)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
+          시나리오 선택
+        </h2>
+        <p className="text-sm" style={{ color:'#4e6a92' }}>경제 환경과 은퇴 후 자산 인출 전략을 설정하세요.</p>
+      </div>
+
+      {/* 경제 환경 섹션 */}
+      <Card className="p-5">
+        <h3 className="text-base font-bold text-gray-800 mb-1">경제 환경 시나리오</h3>
+        <p className="text-xs text-gray-400 mb-4">어떤 경제 상황을 가정하고 시뮬레이션할까요?</p>
+        <div className="space-y-3">
+          {Object.entries(SC_INFO).map(([k, sc]) => {
+            const sel = scenario === k;
+            return (
+              <div key={k} onClick={() => setScenario(k)}
+                className="p-4 rounded-2xl cursor-pointer transition-all"
+                style={sel ? selStyle[k] : defStyle}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">{sc.icon}</span>
+                    <div>
+                      <div className="font-bold" style={{ color: '#1a2744' }}>{sc.label}</div>
+                      <div className="text-xs mt-0.5" style={{ color: '#5575a0' }}>{sc.desc}</div>
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center"
+                    style={sel
+                      ? { borderColor: '#6366f1', background: 'linear-gradient(135deg,#3b82f6,#7c3aed)' }
+                      : { borderColor: 'rgba(90,130,200,0.35)', background: 'transparent' }}>
+                    {sel && <div className="w-2 h-2 rounded-full bg-white" />}
+                  </div>
+                </div>
+                {sel && sc.tags.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {sc.tags.map((t, i) => (
+                      <span key={i} className="px-2.5 py-1 rounded-full text-xs"
+                        style={{ background:'rgba(90,130,200,0.10)', border:'1px solid rgba(90,130,200,0.20)', color:'#3d5580' }}>{t}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* 은퇴 후 자산 인출 우선순위 */}
+      <WithdrawalOrderSection inp={inp} setInp={setInp} />
+
+      <NavRow onPrev={onPrev} onNext={onNext} nextLabel="결과 보기 →" />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// DETAIL PANEL — 연도별 상세 내역
+// ─────────────────────────────────────────────
+function DetailPanel({ row, inp, onClose, retirementAge }) {
+  if (!row) return null;
+  const [taxOpen, setTaxOpen] = React.useState(false);
+
+  const Section = ({ title, color, items, total, totalLabel = '합계' }) => (
+    <div className="mb-5">
+      <div className="text-xs font-bold mb-2 pb-1 border-b"
+        style={{ color:'#1a2744', borderColor:'rgba(90,130,200,0.18)' }}>{title}</div>
+      <div className="space-y-1.5">
+        {items.filter(it => it.value !== 0).map((it, i) => (
+          <div key={i} className="flex justify-between text-xs">
+            <span style={{ color:'#4e6a92' }}>{it.label}</span>
+            <span className={`font-medium ${it.color || ''}`} style={!it.color ? { color:'#2c4068' } : {}}>{fmt(it.value)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between text-xs font-bold mt-2 pt-1.5 border-t"
+        style={{ borderColor:'rgba(90,130,200,0.18)', color:'#1a2744' }}>
+        <span>{totalLabel}</span>
+        <span>{fmt(total)}</span>
+      </div>
+    </div>
+  );
+
+  // 세금 계산 근거 상세 패널
+  const TaxDetailSection = ({ tb, td, age, retirementAge }) => {
+    if (!td) return null;
+    const isRet = age >= retirementAge;
+    const pRate = (td.marginalRate * 100).toFixed(0);
+    const fmtN  = v => v == null ? '—' : Math.round(v).toLocaleString();
+
+    return (
+      <div className="mt-2 mb-3">
+        <button onClick={() => setTaxOpen(o => !o)}
+          className="w-full flex items-center justify-between text-xs py-1.5 px-2 rounded-lg transition"
+          style={{ background:'rgba(90,130,200,0.10)', color:'#5575a0' }}
+          onMouseEnter={e => e.currentTarget.style.background='rgba(90,130,200,0.16)'}
+          onMouseLeave={e => e.currentTarget.style.background='rgba(90,130,200,0.10)'}>
+          <span className="font-semibold" style={{ color:'#2c4068' }}>📋 세금 계산 근거 보기</span>
+          <span>{taxOpen ? '▲' : '▼'}</span>
+        </button>
+
+        {taxOpen && (
+          <div className="mt-2 space-y-3 text-xs rounded-xl p-3" style={{ background:'rgba(240,245,255,0.80)' }}>
+
+            {/* 4대보험 */}
+            {!isRet && td.salary > 0 && (
+              <div>
+                <div className="font-bold mb-1 pb-1 border-b" style={{ color:'#2c4068', borderColor:'rgba(90,130,200,0.18)' }}>① 4대보험료 (근로자 부담)</div>
+                <div className="space-y-1 text-gray-600">
+                  <div className="flex justify-between"><span>국민연금 4.75% (상한 월 637만)</span><span>{fmtN(td.npPremium)}원</span></div>
+                  <div className="flex justify-between"><span>건강보험 3.595%</span><span>{fmtN(td.healthPremium)}원</span></div>
+                  <div className="flex justify-between"><span>장기요양 건보료×13.14%</span><span>{fmtN(td.ltcPremium)}원</span></div>
+                  <div className="flex justify-between"><span>고용보험 0.9%</span><span>{fmtN(td.emplPremium)}원</span></div>
+                  {td.extraHealth > 0 && <div className="flex justify-between text-orange-600"><span>보수외소득 2천만 초과 추가 건보 7.19%</span><span>{fmtN(td.extraHealth)}원</span></div>}
+                  <div className="flex justify-between font-semibold border-t pt-1" style={{ borderColor:'rgba(90,130,200,0.18)', color:'#2c4068' }}><span>소계</span><span>{fmtN(tb.social)}원</span></div>
+                </div>
+              </div>
+            )}
+            {isRet && (
+              <div>
+                <div className="font-bold mb-1 pb-1 border-b" style={{ color:'#2c4068', borderColor:'rgba(90,130,200,0.18)' }}>
+                  ① 건강보험료 (지역가입자{age - retirementAge <= 2 ? ' · 임의계속 2년' : ''})
+                </div>
+                <div className="text-gray-500 text-xs py-1">
+                  {age - retirementAge <= 2
+                    ? '임의계속가입: 퇴직 전 보수월액 기준, 사업주분 포함 전액 본인 부담'
+                    : '지역가입자: (연금+금융소득) × 7.19% + 장기요양 + 재산 보험료'
+                  }
+                </div>
+                <div className="flex justify-between font-semibold"><span>연간 건강보험료</span><span>{fmtN(tb.social)}원</span></div>
+              </div>
+            )}
+
+            {/* 근로소득세 */}
+            {td.salary > 0 && (
+              <div>
+                <div className="font-bold mb-1 pb-1 border-b" style={{ color:'#2c4068', borderColor:'rgba(90,130,200,0.18)' }}>② 근로소득세 계산</div>
+                <div className="space-y-1 text-gray-600">
+                  <div className="flex justify-between"><span>총급여</span><span>{fmtN(td.salary)}원</span></div>
+                  <div className="flex justify-between text-blue-600"><span>− 근로소득공제 (최대 1,475만)</span><span>−{fmtN(td.earnedDed)}원</span></div>
+                  <div className="flex justify-between text-blue-600">
+                    <span>− 인적공제 (본인 150만{td.married ? '+배우자 150만' : ''}{td.childCount > 0 ? `+자녀 ${td.childCount}인×150만` : ''})</span>
+                    <span>−{fmtN(td.personalDed)}원</span>
+                  </div>
+                  {td.pensionDed > 0 && <div className="flex justify-between text-blue-600"><span>− 연금소득공제</span><span>−{fmtN(td.pensionDed)}원</span></div>}
+                  <div className="flex justify-between text-blue-600"><span>− 사회보험료 공제</span><span>−{fmtN(td.socialDed)}원</span></div>
+                  <div className="flex justify-between font-semibold border-t pt-1" style={{ borderColor:'rgba(90,130,200,0.18)', color:'#2c4068' }}><span>과세표준</span><span>{fmtN(td.taxableBase)}원</span></div>
+                  <div className="rounded px-2 py-1 text-xs mb-0.5" style={{ background:'rgba(251,146,60,0.15)', color:'#fdba74' }}>
+                    적용 구간: {td.taxableBase <= 14e6 ? '1,400만 이하 → 6%' : td.taxableBase <= 50e6 ? '1,400만~5,000만 → 15% (누진공제 126만)' : td.taxableBase <= 88e6 ? '5,000만~8,800만 → 24% (누진공제 576만)' : td.taxableBase <= 150e6 ? '8,800만~1.5억 → 35% (누진공제 1,544만)' : td.taxableBase <= 300e6 ? '1.5억~3억 → 38% (누진공제 1,994만)' : td.taxableBase <= 500e6 ? '3억~5억 → 40% (누진공제 2,594만)' : td.taxableBase <= 1e9 ? '5억~10억 → 42% (누진공제 3,594만)' : '10억 초과 → 45% (누진공제 6,594만)'}
+                  </div>
+                  <div className="flex justify-between text-orange-600">
+                    <span>× 세율 {pRate}% − 누진공제 = 산출세액</span>
+                    <span>= {fmtN(td.grossTax)}원</span>
+                  </div>
+                  {td.totalCredits > 0 && (
+                    <>
+                      <div className="text-blue-600 mt-0.5">세액공제 합계: −{fmtN(td.totalCredits)}원</div>
+                      <div className="pl-3 space-y-0.5 text-gray-500">
+                        {td.creditBreakdown?.earned    > 0 && <div className="flex justify-between"><span>근로소득세액공제</span><span>{fmtN(td.creditBreakdown.earned)}원</span></div>}
+                        {td.creditBreakdown?.pension   > 0 && <div className="flex justify-between"><span>연금저축·IRP {td.salary <= 55e6 ? '16.5' : '13.2'}% (한도 {td.salary <= 55e6 ? '148.5' : '118.8'}만)</span><span>{fmtN(td.creditBreakdown.pension)}원</span></div>}
+                        {td.creditBreakdown?.insurance > 0 && <div className="flex justify-between"><span>보장성보험 12% (한도 10만)</span><span>{fmtN(td.creditBreakdown.insurance)}원</span></div>}
+                        {td.creditBreakdown?.medical   > 0 && <div className="flex justify-between"><span>의료비 15% (총급여 3% 초과분)</span><span>{fmtN(td.creditBreakdown.medical)}원</span></div>}
+                        {td.creditBreakdown?.child     > 0 && <div className="flex justify-between"><span>자녀세액공제 (1명15만·2명35만…)</span><span>{fmtN(td.creditBreakdown.child)}원</span></div>}
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between font-semibold border-t pt-1" style={{ borderColor:'rgba(90,130,200,0.18)', color:'#2c4068' }}><span>결정세액</span><span>{fmtN(td.finalIncomeTax)}원</span></div>
+                  <div className="flex justify-between text-gray-500"><span>지방소득세 결정세액×10%</span><span>{fmtN(tb.local)}원</span></div>
+                </div>
+              </div>
+            )}
+
+            {/* 금융소득세 */}
+            {td.financial > 0 && (
+              <div>
+                <div className="font-bold mb-1 pb-1 border-b" style={{ color:'#2c4068', borderColor:'rgba(90,130,200,0.18)' }}>③ 금융소득세</div>
+                <div className="space-y-1 text-gray-600">
+                  <div className="rounded px-2 py-1 text-xs mb-0.5" style={{ background:'rgba(220,234,255,0.70)', color:'#3d5580' }}>
+                    2,000만 이하: 원천징수 분리과세 14% + 지방세 1.4% = <strong>15.4%</strong><br/>
+                    2,000만 초과: 초과분은 근로소득에 합산 → 종합과세 (누진세율 6~45%)
+                  </div>
+                  <div className="flex justify-between"><span>금융소득 합계</span><span>{fmtN(td.financial)}원</span></div>
+                  {td.financial <= 20e6
+                    ? <div className="flex justify-between"><span>2천만 이하 → 분리과세 15.4% 적용</span><span>{fmtN(tb.financial)}원</span></div>
+                    : <>
+                        <div className="flex justify-between"><span>2천만 이하 분리과세 15.4%</span><span>{fmtN(20e6 * 0.154)}원</span></div>
+                        <div className="flex justify-between"><span>2천만 초과분 → 종합과세 합산</span><span>{fmtN(tb.financial - 20e6 * 0.154)}원</span></div>
+                      </>
+                  }
+                  <div className="flex justify-between font-semibold border-t pt-1" style={{ borderColor:'rgba(90,130,200,0.18)', color:'#2c4068' }}><span>금융소득세 합계</span><span>{fmtN(tb.financial)}원</span></div>
+                </div>
+              </div>
+            )}
+
+            {/* 사적연금세 */}
+            {tb.privPenTax > 0 && (
+              <div>
+                <div className="font-bold mb-1 pb-1 border-b" style={{ color:'#2c4068', borderColor:'rgba(90,130,200,0.18)' }}>④ 사적연금 수령세</div>
+                <div className="space-y-1 text-gray-600">
+                  <div className="rounded px-2 py-1 text-xs" style={{ background:'rgba(220,234,255,0.70)', color:'#3d5580' }}>
+                    {row.privPen_ > 15e6
+                      ? `연 수령액 ${Math.round(row.privPen_/1e4).toLocaleString()}만원 > 1,500만원 → 16.5% 분리과세`
+                      : <>세율 구간: 55~69세 5.5% / 70~79세 4.4% / 80세 이상 3.3%<br/>
+                         현재 적용: {age >= 80 ? '80세↑ → 3.3%' : age >= 70 ? '70~79세 → 4.4%' : '55~69세 → 5.5%'}</>
+                    }
+                  </div>
+                  <div>분리과세 — 종합소득세에 합산되지 않음</div>
+                  <div className="flex justify-between font-semibold border-t pt-1" style={{ borderColor:'rgba(90,130,200,0.18)', color:'#2c4068' }}><span>사적연금 수령세</span><span>{fmtN(tb.privPenTax)}원</span></div>
+                </div>
+              </div>
+            )}
+
+            {/* 부동산 보유세 */}
+            {tb.propertyTax > 0 && (
+              <div>
+                <div className="font-bold mb-1 pb-1 border-b" style={{ color:'#2c4068', borderColor:'rgba(90,130,200,0.18)' }}>⑤ 부동산 보유세</div>
+                <div className="space-y-1 text-gray-600">
+                  <div>공시가격 ≈ 시가 × 70% / 과세표준 = 공시가 × 60%</div>
+                  <div className="bg-gray-100 rounded px-2 py-1 text-xs mt-0.5">
+                    재산세 구간: 6천만 이하 0.1% / ~1.5억 0.15% / ~3억 0.25% / 초과 0.4%<br/>
+                    × 1.4배 가산 (도시지역분·지방교육세 포함)
+                  </div>
+                  <div>종합부동산세: 공시가 12억 초과분 × 60% × 약 1% (1세대1주택)</div>
+                  <div className="flex justify-between font-semibold border-t pt-1" style={{ borderColor:'rgba(90,130,200,0.18)', color:'#2c4068' }}><span>보유세 합계</span><span>{fmtN(tb.propertyTax)}원</span></div>
+                </div>
+              </div>
+            )}
+
+            {/* 퇴직소득세 (은퇴 연도) */}
+            {row.retirePayoutTax > 0 && (
+              <div>
+                <div className="font-bold mb-1 pb-1 border-b" style={{ color:'#2c4068', borderColor:'rgba(90,130,200,0.18)' }}>⑥ 퇴직소득세</div>
+                <div className="space-y-1 text-gray-600">
+                  <div>근속연수 공제 후 환산급여 산출 → 소득세 누진세율(6~45%) 적용</div>
+                  <div>분류과세 (종합소득세에 합산 안 됨) + 지방소득세 10% 포함</div>
+                  {row.retirePayoutTax > 0 && row.retirePayout > 0 && (
+                    <div className="rounded px-2 py-1 text-xs" style={{ background:'rgba(220,234,255,0.70)', color:'#3d5580' }}>
+                      추정 실효세율: 약 {((row.retirePayoutTax / (row.retirePayout + row.retirePayoutTax)) * 100).toFixed(1)}%
+                      (세전 {fmtN(row.retirePayout + row.retirePayoutTax)}원 → 세후 {fmtN(row.retirePayout)}원)
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold border-t pt-1" style={{ borderColor:'rgba(90,130,200,0.18)', color:'#2c4068' }}><span>퇴직소득세 (지방세 포함)</span><span>{fmtN(row.retirePayoutTax)}원</span></div>
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const ib = row.incBreakdown  || {};
+  const eb = row.expBreakdown  || {};
+  const tb = row.taxBreakdown  || {};
+  const td = row.taxDetail     || null;
+
+  const isRetired = row.age >= retirementAge;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
+      style={{ background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)' }}
+      onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl md:rounded-2xl shadow-2xl"
+        style={{ background:'rgba(245,249,255,0.98)', border:'1px solid rgba(90,130,200,0.22)', backdropFilter:'blur(20px)' }}
+        onClick={e => e.stopPropagation()}>
+        {/* 헤더 */}
+        <div className="sticky top-0 px-5 py-4 flex items-center justify-between rounded-t-2xl"
+          style={{ background:'rgba(238,244,255,0.99)', borderBottom:'1px solid rgba(90,130,200,0.16)' }}>
+          <div>
+            <span className="text-base font-bold" style={{ color:'#1a2744' }}>{row.age}세 상세 내역</span>
+            {isRetired && <span className="ml-2 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background:'rgba(37,99,235,0.14)', color:'#1e40af' }}>은퇴 후</span>}
+            {row.isRecession  && <span className="ml-2 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background:'rgba(180,83,9,0.12)', color:'#92400e' }}>경기침체</span>}
+            {row.isDepression && <span className="ml-2 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background:'rgba(185,28,28,0.12)', color:'#991b1b' }}>대공황</span>}
+            {row.events?.length > 0 && row.events.map((e,i) => (
+              <span key={i} className="ml-1 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background:'rgba(109,40,217,0.12)', color:'#5b21b6' }}>{e}</span>
+            ))}
+          </div>
+          <button onClick={onClose} className="text-xl font-bold leading-none" style={{ color:'#5575a0' }}>×</button>
+        </div>
+
+        <div className="px-5 py-4">
+          {/* 현금흐름 요약 */}
+          <div className="grid grid-cols-3 gap-2 mb-5">
+            {[
+              { label: '총 소득', val: row.income, color: 'text-blue-600' },
+              { label: '총 지출+세금', val: row.expense + row.tax, color: 'text-red-500' },
+              { label: row.cf >= 0 ? '순 저축' : '자산 인출', val: row.cf, color: row.cf >= 0 ? 'text-green-600' : 'text-red-600' },
+            ].map(c => (
+              <div key={c.label} className="rounded-xl p-3 text-center"
+                style={{ background:'rgba(255,255,255,0.85)', border:'1px solid rgba(90,130,200,0.18)' }}>
+                <div className="text-xs mb-1" style={{ color:'#5575a0' }}>{c.label}</div>
+                <div className={`text-sm font-bold ${c.color}`}>{fmt(c.val)}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 퇴직연금 수령 배너 (은퇴 연도에만 표시) */}
+          {(row.retirePayout > 0) && (
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 mb-4">
+              <div className="text-xs font-bold text-purple-700 mb-1">🎉 퇴직연금 수령 (이 연도)</div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">세전 수령액</span>
+                <span className="font-medium">{fmt(row.retirePayout + row.retirePayoutTax)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">퇴직소득세</span>
+                <span className="font-medium text-red-500">-{fmt(row.retirePayoutTax)}</span>
+              </div>
+              <div className="flex justify-between text-xs font-bold border-t border-purple-200 pt-1 mt-1">
+                <span className="text-purple-700">세후 현금 수령</span>
+                <span className="text-purple-700">{fmt(row.retirePayout)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* A. 소득 내역 */}
+          <Section title="소득 내역" color="text-blue-400"
+            total={row.income}
+            items={[
+              { label: '근로소득',               value: ib.earned      || 0 },
+              { label: '배우자 소득',             value: ib.spouse      || 0 },
+              { label: '자산 수익 (포트폴리오)',   value: ib.assetYield  || 0 },
+              { label: '금융소득 (외부)',          value: ib.extFin      || 0 },
+              { label: '국민연금',                value: ib.pubPension  || 0 },
+              { label: '사적연금 (IRP/연금저축)', value: ib.privPension || 0 },
+              { label: '기타소득',                value: ib.other       || 0 },
+            ]}
+          />
+
+          {/* B. 지출 내역 */}
+          <Section title="지출 내역" color="text-red-400"
+            total={row.expense}
+            items={[
+              { label: isRetired && inp?.retirementExpenseEnabled ? '생활비 (은퇴 후 직접 설정, 물가 반영)' : '생활비 (물가 반영)', value: eb.living  || 0 },
+              { label: '주거비 (물가 반영)', value: eb.housing || 0 },
+              { label: '기타 고정지출 (물가 반영)', value: eb.extra || 0 },
+              { label: '결혼 비용',       value: eb.marriage      || 0, color: 'text-purple-600' },
+              { label: '결혼 후 추가 지출 (물가 반영)', value: eb.marriageExtra || 0, color: 'text-purple-500' },
+              { label: '양육비 (물가 반영)', value: eb.childcare   || 0 },
+              { label: '대학 교육비 (물가 반영)', value: eb.education     || 0 },
+              { label: '부모 부양비 (물가 반영)', value: eb.parentSupport || 0 },
+            ]}
+          />
+
+          {/* C. 세금·보험료 */}
+          <Section title="세금 · 사회보험료" color="text-slate-400"
+            total={row.tax + (tb.retirePayoutTax || 0)}
+            items={[
+              { label: isRetired ? `건강보험료 (지역가입자${row.age - retirementAge <= 2 ? ' 임의계속' : ''})` : '4대보험료 (국민연금+건강+장기요양+고용)',
+                value: tb.social || 0 },
+              { label: '근로소득세',                                       value: tb.incomeTax  || 0 },
+              { label: '지방소득세',                                       value: tb.local      || 0 },
+              { label: '금융소득세 (원천징수/종합과세)',                     value: tb.financial  || 0 },
+              { label: `사적연금 수령세 (${row.privPen_ > 15e6 ? '16.5%' : row.age >= 80 ? '3.3%' : row.age >= 70 ? '4.4%' : '5.5%'})`,
+                value: tb.privPenTax || 0 },
+              { label: '부동산 보유세 (재산세+종부세)',                     value: tb.propertyTax || 0 },
+              { label: '퇴직소득세 (근속연수 공제 후 분류과세 + 지방세)',   value: tb.retirePayoutTax || 0 },
+            ]}
+          />
+          <TaxDetailSection tb={tb} td={td} age={row.age} retirementAge={retirementAge} />
+
+          {/* D. 자산 현황 */}
+          <div className="mb-4">
+            <div className="text-xs font-bold mb-2 pb-1 border-b" style={{ color:'#1a2744', borderColor:'rgba(90,130,200,0.18)' }}>자산 현황 (연말 기준)</div>
+            <div className="space-y-1.5">
+              {[
+                { label: '예금/현금',    val: row.cash,    color: '#93c5fd' },
+                { label: '국내주식',     val: row.dom,     color: '#86efac' },
+                { label: '해외주식',     val: row.ovs,     color: '#fde68a' },
+                { label: '채권/펀드',    val: row.bonds,   color: '#2dd4bf' },
+                { label: '연금계좌',     val: row.pension, color: '#c4b5fd' },
+                { label: '부동산',       val: row.re,      color: '#2c4068' },
+              ].map(a => (
+                <div key={a.label} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: a.color, display: 'inline-block' }} />
+                    <span className="text-gray-500">{a.label}</span>
+                  </div>
+                  <span className="font-medium text-gray-800">{fmt(a.val)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between text-xs font-bold mt-2 pt-1.5 border-t" style={{ borderColor:'rgba(90,130,200,0.18)', color:'#1a2744' }}>
+              <span>총자산</span>
+              <span>{fmt(row.totalNet)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PAGE 5 — 결과
+// ─────────────────────────────────────────────
+function ResultPage({ inp, scenario, onBack, onPrev }) {
+  const result = useMemo(() => runSimulation(inp, scenario), [inp, scenario]);
+  const { rows, depletionAge, retirementAssets, monthlyBudget, insights } = result;
+  const [tableOpen, setTableOpen] = useState(false);
+  const [interval,  setTblInt]    = useState(5);
+  const [detailRow,  setDetailRow] = useState(null);
+
+  const summCards = [
+    { label: '은퇴 시 총자산',    val: fmt(retirementAssets),                                           ok: retirementAssets > 0 },
+    { label: '자산 고갈 시점',    val: depletionAge ? `${depletionAge}세` : '고갈 없음',                ok: !depletionAge },
+    { label: '은퇴 후 월 가용액', val: fmt(monthlyBudget),                                              ok: monthlyBudget > 500000 },
+    { label: '시나리오',          val: SC_INFO[scenario]?.label || scenario,                            ok: scenario === 'BASELINE' },
+  ];
+
+  const tableRows = rows.filter(r =>
+    r.age % interval === 0 ||
+    r.age === inp.age ||
+    r.age === inp.lifeExpectancy ||
+    r.age === inp.retirementAge
+  );
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-5">
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {summCards.map(c => (
+          <Card key={c.label} className="p-4 text-center">
+            <div className="text-xs mb-1" style={{ color:'#4e6a92' }}>{c.label}</div>
+            <div className="text-base font-bold" style={{ color: c.ok ? '#60a5fa' : '#f87171' }}>{c.val}</div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Asset chart */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold" style={{ color:'#2c4068' }}>자산 추이</h3>
+          <span className="text-xs" style={{ color:'#4e6a92' }}>※ 국민연금 수령액 미포함</span>
+        </div>
+        <AssetChart rows={rows} retireAge={inp.retirementAge} depletionAge={depletionAge} />
+      </Card>
+
+      {/* Income/Expense chart */}
+      <Card className="p-5">
+        <h3 className="text-sm font-bold mb-3" style={{ color:'#2c4068' }}>소득 vs 지출</h3>
+        <IncomeExpenseChart rows={rows} retireAge={inp.retirementAge} />
+      </Card>
+
+      {/* Insights */}
+      <Card className="p-5">
+        <h3 className="text-sm font-bold mb-3" style={{ color:'#2c4068' }}>📌 핵심 인사이트</h3>
+        <ul className="space-y-2">
+          {insights.map((ins, i) => (
+            <li key={i} className="flex gap-2 text-sm" style={{ color:'#4e6a92' }}>
+              <span className="text-blue-400 flex-shrink-0 mt-0.5">▸</span>
+              <span>{ins}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      {/* Detail table */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={() => setTableOpen(!tableOpen)} className="text-sm font-bold text-gray-700 flex items-center gap-2">
+            연도별 상세 데이터 <span className="text-gray-400 text-xs">{tableOpen ? '▲' : '▼'}</span>
+          </button>
+          {tableOpen && (
+            <div className="flex gap-1.5">
+              {[1, 5, 10].map(n => (
+                <button key={n} onClick={() => setTblInt(n)}
+                  className="px-2.5 py-1 text-xs rounded-full transition"
+                  style={interval === n
+                    ? { background:'linear-gradient(135deg,#3b82f6,#7c3aed)', color:'#fff', border:'1px solid transparent' }
+                    : { background:'rgba(255,255,255,0.80)', color:'#3d5580', border:'1px solid rgba(90,130,200,0.22)' }}>
+                  {n === 1 ? '매년' : `${n}년`}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {tableOpen && (
+          <>
+            <p className="text-xs text-gray-400 mb-2">나이를 클릭하면 해당 연도 상세 내역을 볼 수 있습니다.</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ borderBottom:'1px solid rgba(90,130,200,0.16)' }}>
+                    {['나이', '소득', '지출', '세금', '순저축', '총자산'].map(h => (
+                      <th key={h} className="py-2 px-1.5 text-right font-semibold first:text-left"
+                        style={{ color:'#4e6a92' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableRows.map(r => {
+                    const isRet = r.age === inp.retirementAge;
+                    const isDep = r.age === depletionAge;
+                    const isRec = r.isRecession;
+                    const isCra = r.isDepression;
+                    const rowBg = isRet ? 'rgba(59,130,246,0.09)' : isDep || isCra ? 'rgba(239,68,68,0.08)' : isRec ? 'rgba(245,158,11,0.08)' : 'transparent';
+                    return (
+                      <tr key={r.age}
+                        onClick={() => setDetailRow(r)}
+                        className="cursor-pointer transition"
+                        style={{ borderBottom:'1px solid rgba(90,130,200,0.12)', background: rowBg }}
+                        onMouseEnter={e => e.currentTarget.style.background='rgba(59,130,246,0.10)'}
+                        onMouseLeave={e => e.currentTarget.style.background=rowBg}>
+                        <td className="py-2 px-1.5 font-medium" style={{ color:'#2c4068' }}>
+                          <span className="underline underline-offset-2 cursor-pointer" style={{ color:'#2563eb' }}>{r.age}세</span>
+                          {isRet && <span className="ml-1 text-xs" style={{ color:'#2563eb' }}>은퇴</span>}
+                          {isDep && <span className="ml-1 text-xs text-red-400">고갈</span>}
+                          {isCra && <span className="ml-1 text-xs text-red-400">대공황</span>}
+                          {isRec && <span className="ml-1 text-xs text-amber-400">침체</span>}
+                          {r.events?.length > 0 && <span className="ml-1 text-xs" style={{ color:'#c4b5fd' }}>★</span>}
+                        </td>
+                        <td className="py-2 px-1.5 text-right" style={{ color:'#93c5fd' }}>{fmt(r.income)}</td>
+                        <td className="py-2 px-1.5 text-right text-red-400">{fmt(r.expense)}</td>
+                        <td className="py-2 px-1.5 text-right" style={{ color:'#4e6a92' }}>{fmt(r.tax + (r.retirePayoutTax || 0))}</td>
+                        {(() => { const cf = r.cf - (r.retirePayoutTax || 0); return (
+                        <td className={`py-2 px-1.5 text-right font-medium ${cf >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt(cf)}</td>
+                        ); })()}
+                        <td className="py-2 px-1.5 text-right font-bold" style={{ color:'#1a2744' }}>{fmt(r.totalNet)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-gray-400 mt-3 text-right">※ 국민연금 수령액은 자산에 포함되지 않습니다.</p>
+          </>
+        )}
+      </Card>
+
+      {/* 상세 패널 */}
+      {detailRow && <DetailPanel row={detailRow} inp={inp} onClose={() => setDetailRow(null)} retirementAge={inp.retirementAge} />}
+
+      <div className="flex gap-3">
+        <button onClick={onPrev}
+          className="flex-1 py-3 rounded-xl font-medium text-sm transition"
+          style={{ border:'1px solid rgba(90,130,200,0.22)', color:'#3d5580', background:'rgba(255,255,255,0.75)' }}>
+          ← 시나리오 변경
+        </button>
+        <button onClick={onBack}
+          className="flex-1 py-3 rounded-xl font-medium text-sm transition"
+          style={{ border:'1px solid rgba(90,130,200,0.22)', color:'#3d5580', background:'rgba(255,255,255,0.75)' }}>
+          ↩ 처음으로
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// APP
+// ─────────────────────────────────────────────
+function App() {
+  const [page,     setPage]     = useState(0);
+  const [inp,      setInp]      = useState(PRESETS.MID);
+  const [scenario, setScenario] = useState('BASELINE');
+
+  const goTo = (n) => { window.scrollTo({ top: 0, behavior: 'instant' }); setPage(n); };
+
+  return (
+    <div className="min-h-screen py-8 px-4">
+      <div className="max-w-2xl mx-auto">
+        <Steps cur={page} onStep={goTo} />
+        {page === 0 && <PresetPage   inp={inp} setInp={setInp} onNext={() => goTo(1)} />}
+        {page === 1 && <InfoPage     inp={inp} setInp={setInp} onPrev={() => goTo(0)} onNext={() => goTo(2)} />}
+        {page === 2 && <InvestPage   inp={inp} setInp={setInp} onPrev={() => goTo(1)} onNext={() => goTo(3)} />}
+        {page === 3 && <ScenarioPage scenario={scenario} setScenario={setScenario} inp={inp} setInp={setInp} onPrev={() => goTo(2)} onNext={() => goTo(4)} />}
+        {page === 4 && <ResultPage   inp={inp} scenario={scenario} onBack={() => goTo(0)} onPrev={() => goTo(3)} />}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
